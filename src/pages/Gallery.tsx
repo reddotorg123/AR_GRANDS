@@ -14,16 +14,16 @@ import gallery9 from "@/assets/gallery-9.jpg";
 import gallery10 from "@/assets/gallery-10.jpg";
 
 const images = [
-  { src: gallery1, alt: "A.R Grand Marriage Hall Aerial Exterior View", span: "lg:row-span-2" },
-  { src: gallery2, alt: "Elegant Wedding Stage Decoration with Floral Arch", span: "" },
-  { src: gallery3, alt: "Close-up of Bridal Stage with Floral Arrangements", span: "lg:col-span-2" },
-  { src: gallery4, alt: "Grand Entrance with Traditional Floral Garlands", span: "" },
-  { src: gallery5, alt: "Hall Front View with Stage and Seating", span: "lg:row-span-2" },
-  { src: gallery6, alt: "Hall Back View with Full Seating Arrangement", span: "" },
-  { src: gallery7, alt: "Hall Side View with Stage and Seated Layout", span: "" },
-  { src: gallery8, alt: "Spacious Hall Interior with Decorated Seating", span: "lg:col-span-2" },
-  { src: gallery9, alt: "Wide Hall View Showcasing Capacity and Decor", span: "" },
-  { src: gallery10, alt: "Lift and Staircase Access to Marriage Hall", span: "" },
+  { src: gallery1, alt: "A.R Grand Marriage Hall Aerial Exterior View", span: "lg:col-start-1 lg:row-start-1 lg:row-span-2" },
+  { src: gallery2, alt: "Elegant Wedding Stage Decoration with Floral Arch", span: "lg:col-start-2 lg:row-start-1" },
+  { src: gallery3, alt: "Close-up of Bridal Stage with Floral Arrangements", span: "col-span-2 lg:col-start-3 lg:col-span-2 lg:row-start-1" },
+  { src: gallery4, alt: "Grand Entrance with Traditional Floral Garlands", span: "lg:col-start-2 lg:row-start-2" },
+  { src: gallery5, alt: "Hall Front View with Stage and Seating", span: "lg:col-start-3 lg:row-start-2 lg:row-span-2" },
+  { src: gallery6, alt: "Hall Back View with Full Seating Arrangement", span: "lg:col-start-4 lg:row-start-2" },
+  { src: gallery7, alt: "Hall Side View with Stage and Seated Layout", span: "lg:col-start-1 lg:row-start-3" },
+  { src: gallery8, alt: "Spacious Hall Interior with Decorated Seating", span: "col-span-2 lg:col-start-1 lg:col-span-2 lg:row-start-4" },
+  { src: gallery9, alt: "Wide Hall View Showcasing Capacity and Decor", span: "lg:col-start-3 lg:row-start-4" },
+  { src: gallery10, alt: "Lift and Staircase Access to Marriage Hall", span: "lg:col-start-4 lg:row-start-4" },
 ];
 
 const Gallery = () => {
@@ -53,7 +53,7 @@ const Gallery = () => {
       </section>
 
       <section className="px-4 md:px-8 lg:px-16 pb-24 max-w-7xl mx-auto">
-        <div className="grid grid-cols-2 lg:grid-cols-4 auto-rows-[220px] gap-4 grid-flow-dense">
+        <div className="grid grid-cols-2 lg:grid-cols-4 auto-rows-[220px] gap-4">
           {images.map((img, i) => (
             <button
               key={i}

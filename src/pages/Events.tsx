@@ -34,13 +34,21 @@ const Events = () => {
   const { data: events = [], isLoading } = useQuery({
     queryKey: ["booked_events"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("booked_events")
-        .select("*")
-        .order("event_date", { ascending: true });
-      if (error) throw error;
-      return data as BookedEvent[];
+      try {
+        const { data, error } = await supabase
+          .from("booked_events")
+          .select("*")
+          .order("event_date", { ascending: true })
+          .abortSignal(AbortSignal.timeout(4000));
+        if (error) throw error;
+        return (data || []) as BookedEvent[];
+      } catch (err) {
+        console.warn("Failed to load booked events, showing empty fallback:", err);
+        return [];
+      }
     },
+    staleTime: 1000 * 60 * 5,
+    retry: 1,
   });
 
   const addMutation = useMutation({
@@ -166,7 +174,7 @@ const Events = () => {
         description="Check available wedding & event dates at A.R Grand Marriage Hall in Kodungaiyur, Chennai. Reserve your preferred date before it's booked."
         path="/events"
       />
-      <section className="section-padding max-w-6xl mx-auto">
+      <section className="px-4 pt-4 pb-16 md:px-8 md:pt-6 md:pb-24 lg:px-16 max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-4">
           <h1 className="heading-xl text-foreground">Events & Availability</h1>
           {!adminLoading && (
@@ -288,77 +296,90 @@ const Events = () => {
           </div>
         )}
 
-        {isLoading ? (
-          <p className="text-muted-foreground font-body text-center py-12">Loading...</p>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-            {/* Scheduled Bookings */}
-            <div>
-              <h2 className="heading-md text-foreground mb-6 flex items-center gap-2">
-                <Calendar className="text-primary" size={24} />
-                Scheduled Bookings — {formatMonth(selectedMonth)}
-              </h2>
-              <div className="space-y-3">
-                {filteredEvents.length === 0 ? (
-                  <p className="text-muted-foreground font-body py-4">No bookings for this month.</p>
-                ) : (
-                  filteredEvents.map((event) => (
-                    <div key={event.id} className="bg-card p-4 rounded-lg border border-border flex items-center justify-between">
-                      <div>
-                        <p className="font-body font-semibold text-foreground">{event.event_type}</p>
-                        <p className="font-body text-sm text-muted-foreground">{formatDate(event.event_date)} • {event.hall}{event.start_time || event.end_time ? ` • ${event.start_time?.slice(0,5) || "?"} – ${event.end_time?.slice(0,5) || "?"}` : ""}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`font-body text-xs px-3 py-1 rounded-full font-semibold ${
-                          event.status === "Booked"
-                            ? "bg-destructive/10 text-destructive"
-                            : "bg-yellow-100 text-yellow-700"
-                        }`}>
-                          {event.status}
-                        </span>
-                        {isAdmin && (
-                          <>
-                            <button onClick={() => handleEdit(event)} className="text-muted-foreground hover:text-primary transition-colors">
-                              <Edit2 size={16} />
-                            </button>
-                            <button onClick={() => deleteMutation.mutate(event.id)} className="text-muted-foreground hover:text-destructive transition-colors">
-                              <Trash2 size={16} />
-                            </button>
-                          </>
-                        )}
-                      </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          {/* Scheduled Bookings */}
+          <div>
+            <h2 className="heading-md text-foreground mb-6 flex items-center gap-2">
+              <Calendar className="text-primary" size={24} />
+              Scheduled Bookings — {formatMonth(selectedMonth)}
+            </h2>
+            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+              {isLoading ? (
+                <div className="space-y-3 py-2">
+                  <div className="bg-card/60 p-4 rounded-lg border border-border animate-pulse flex items-center justify-between">
+                    <div className="space-y-2 w-1/2">
+                      <div className="h-4 bg-muted rounded w-3/4"></div>
+                      <div className="h-3 bg-muted rounded w-1/2"></div>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Available Dates */}
-            <div>
-              <h2 className="heading-md text-foreground mb-6 flex items-center gap-2">
-                <Calendar className="text-primary" size={24} />
-                Available Dates — {formatMonth(selectedMonth)}
-              </h2>
-              <div className="space-y-3">
-                {availableDates.length === 0 ? (
-                  <p className="text-muted-foreground font-body py-4">No available dates this month.</p>
-                ) : (
-                  availableDates.map((slot, i) => (
-                    <div key={i} className="bg-card p-4 rounded-lg border border-border flex items-center justify-between">
-                      <div>
-                        <p className="font-body font-semibold text-foreground">{formatDate(slot.date)}</p>
-                        <p className="font-body text-sm text-muted-foreground">{slot.halls}</p>
-                      </div>
-                      <span className="bg-primary/10 text-primary font-body text-xs px-3 py-1 rounded-full font-semibold">
-                        Available
+                    <div className="h-6 w-16 bg-muted rounded-full"></div>
+                  </div>
+                  <div className="bg-card/60 p-4 rounded-lg border border-border animate-pulse flex items-center justify-between">
+                    <div className="space-y-2 w-1/2">
+                      <div className="h-4 bg-muted rounded w-2/3"></div>
+                      <div className="h-3 bg-muted rounded w-2/5"></div>
+                    </div>
+                    <div className="h-6 w-16 bg-muted rounded-full"></div>
+                  </div>
+                </div>
+              ) : filteredEvents.length === 0 ? (
+                <p className="text-muted-foreground font-body py-4">No bookings for this month.</p>
+              ) : (
+                filteredEvents.map((event) => (
+                  <div key={event.id} className="bg-card p-4 rounded-lg border border-border flex items-center justify-between">
+                    <div>
+                      <p className="font-body font-semibold text-foreground">{event.event_type}</p>
+                      <p className="font-body text-sm text-muted-foreground">{formatDate(event.event_date)} • {event.hall}{event.start_time || event.end_time ? ` • ${event.start_time?.slice(0,5) || "?"} – ${event.end_time?.slice(0,5) || "?"}` : ""}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`font-body text-xs px-3 py-1 rounded-full font-semibold ${
+                        event.status === "Booked"
+                          ? "bg-destructive/10 text-destructive"
+                          : "bg-yellow-100 text-yellow-700"
+                      }`}>
+                        {event.status}
                       </span>
+                      {isAdmin && (
+                        <>
+                          <button onClick={() => handleEdit(event)} className="text-muted-foreground hover:text-primary transition-colors">
+                            <Edit2 size={16} />
+                          </button>
+                          <button onClick={() => deleteMutation.mutate(event.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                            <Trash2 size={16} />
+                          </button>
+                        </>
+                      )}
                     </div>
-                  ))
-                )}
-              </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
-        )}
+
+          {/* Available Dates */}
+          <div>
+            <h2 className="heading-md text-foreground mb-6 flex items-center gap-2">
+              <Calendar className="text-primary" size={24} />
+              Available Dates — {formatMonth(selectedMonth)}
+            </h2>
+            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+              {availableDates.length === 0 ? (
+                <p className="text-muted-foreground font-body py-4">No available dates this month.</p>
+              ) : (
+                availableDates.map((slot, i) => (
+                  <div key={i} className="bg-card p-4 rounded-lg border border-border flex items-center justify-between">
+                    <div>
+                      <p className="font-body font-semibold text-foreground">{formatDate(slot.date)}</p>
+                      <p className="font-body text-sm text-muted-foreground">{slot.halls}</p>
+                    </div>
+                    <span className="bg-primary/10 text-primary font-body text-xs px-3 py-1 rounded-full font-semibold">
+                      Available
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
       </section>
     </div>
   );

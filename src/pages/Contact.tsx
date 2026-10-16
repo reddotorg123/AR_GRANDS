@@ -15,7 +15,7 @@ const Contact = () => (
         We'd love to hear from you. Reach out to us for bookings, enquiries, or a venue visit.
       </p>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 xl:gap-24">
         {/* Contact Info */}
         <div className="space-y-8">
           <div className="flex items-start gap-4">

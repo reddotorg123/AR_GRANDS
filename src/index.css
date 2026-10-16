@@ -71,12 +71,14 @@
 
   html {
     scroll-behavior: smooth;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-body);
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
 
   h1,
@@ -161,6 +163,32 @@
   .btn-gold:hover {
     transform: translateY(-2px);
     filter: brightness(1.08);
+  }
+
+  /* Elegant luxury scrollbar for dates palette and scrollable lists */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--gold) / 0.45) hsl(var(--border) / 0.4);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: hsl(var(--border) / 0.3);
+    border-radius: 9999px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--gold) / 0.45);
+    border-radius: 9999px;
+    transition: background 0.3s ease;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--gold) / 0.8);
   }
 
   .btn-outline-gold {
@@ -417,4 +445,32 @@
     transform: scale(1);
     opacity: 1;
   }
+}
+
+/* Elegant Luxury Scrollbar for Pallets and Scrollable Areas */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--gold) / 0.5) hsl(var(--secondary) / 0.4);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: hsl(var(--secondary) / 0.35);
+  border-radius: 9999px;
+  margin: 4px 0;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--gold) / 0.5);
+  border-radius: 9999px;
+  border: 1px solid hsl(var(--background) / 0.5);
+  transition: background-color 0.2s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--gold));
 }

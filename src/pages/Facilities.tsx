@@ -1,9 +1,9 @@
 import SEO from "@/components/SEO";
 import { ArrowUpDown, Car, Zap, Snowflake, DoorClosed, ChefHat } from "lucide-react";
-import facilityLiftAsset from "@/assets/gallery-10.jpg";
+import facilityLift from "@/assets/facility-lift.jpg";
 import facilityParking from "@/assets/facility-parking.jpg";
 import facilityGenset from "@/assets/facility-genset.jpg";
-import facilityAcHallAsset from "@/assets/gallery-8.jpg";
+import facilityAcHall from "@/assets/facility-ac-hall.jpg";
 import facilityPrivateRoom from "@/assets/facility-private-room.jpg";
 import facilityKitchen from "@/assets/facility-kitchen.jpg";
 
@@ -13,7 +13,7 @@ const facilities = [
     title: "Lifts",
     description:
       "Modern passenger elevators provide easy and comfortable access to all floors of the venue, ensuring convenience for elderly guests and those with limited mobility.",
-    image: facilityLiftAsset,
+    image: facilityLift,
     alt: "Modern passenger lift at A.R Grand Marriage Hall",
   },
   {
@@ -37,7 +37,7 @@ const facilities = [
     title: "Fully Air-Conditioned Hall",
     description:
       "The entire hall is centrally air-conditioned, keeping every guest cool and comfortable in any season — perfect for Chennai weather.",
-    image: facilityAcHallAsset,
+    image: facilityAcHall,
     alt: "Fully air-conditioned wedding hall interior",
   },
   {

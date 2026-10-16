@@ -8,6 +8,7 @@ import Footer from "@/components/Footer";
 import WhatsAppButton from "@/components/WhatsAppButton";
 import InteractiveAvatar from "@/components/InteractiveAvatar";
 import Preloader from "@/components/Preloader";
+import ScrollToTop from "@/components/ScrollToTop";
 
 // Lazy load heavy page components for blazing fast initial load
 const Index = lazy(() => import("./pages/Index"));
@@ -44,6 +45,7 @@ const App = () => (
       <Preloader />
       <Toaster />
       <BrowserRouter>
+        <ScrollToTop />
         <Navbar />
         <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background"><div className="w-8 h-8 border-4 border-gold border-t-transparent rounded-full animate-spin"></div></div>}>
           <Routes>

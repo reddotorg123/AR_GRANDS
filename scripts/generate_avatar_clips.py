@@ -39,8 +39,8 @@ master_boy2 = os.path.join(public_dir, "boy animation2.mp4")
 master_dance = os.path.join(public_dir, "avatar-dance.mp4")
 
 # Slices from master_boy2 (10s):
-# 1. Front Standing Welcome & Open Palm (7.4s - 10.0s)
-slice_video(master_boy2, os.path.join(public_dir, "avatar-welcome.mp4"), 7.4, 10.0)
+# 1. Front Standing Welcome & Open Palm (custom green-screen avatar animation provided by user)
+# slice_video(master_boy2, os.path.join(public_dir, "avatar-welcome.mp4"), 7.4, 10.0)
 
 # 2. Forward Jogging / Brisk Cheerful Approach (5.2s - 7.5s)
 slice_video(master_boy2, os.path.join(public_dir, "avatar-approach.mp4"), 5.2, 7.5)
