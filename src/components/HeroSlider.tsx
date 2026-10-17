@@ -3,7 +3,7 @@ import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Navigation, Pagination, EffectFade } from "swiper/modules";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
-import hero1 from "@/assets/hero-1.jpg";
+import gallery1 from "@/assets/gallery-1.jpg";
 import hero2 from "@/assets/hero-2.jpg";
 import hero3 from "@/assets/hero-3.jpg";
 import hero4 from "@/assets/hero-4.jpg";
@@ -17,9 +17,9 @@ import "swiper/css/pagination";
 const slides = [
   { image: hero5, eyebrow: "A.R Grand · Kodungaiyur", title: "Where Dreams Come True", subtitle: "Celebrate your special day in timeless luxury and elegance" },
   { image: hero2, eyebrow: "Signature Celebrations", title: "Elegant Moments, Crafted", subtitle: "Stunning décor and world-class hospitality" },
+  { image: gallery1, eyebrow: "Exquisite Celebrations", title: "Bespoke Stage Décor", subtitle: "Traditional grand mandap designs and custom floral artistry" },
   { image: hero3, eyebrow: "Grand Wedding Halls", title: "A Stage For Forever", subtitle: "Spacious seating with breathtaking stage settings" },
   { image: hero4, eyebrow: "Intimate to Grand", title: "Unforgettable Moments", subtitle: "Capacity for 50 to 250 distinguished guests" },
-  { image: hero1, eyebrow: "Premium Venue", title: "Architectural Grandeur", subtitle: "Fully air-conditioned landmark venue in North Chennai" },
 ];
 
 const HeroSlider = () => {
