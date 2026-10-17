@@ -169,16 +169,45 @@ export default function Preloader() {
     };
 
     // --- COMPREHENSIVE ASSET PRELOAD ENGINE ---
-    // Preload critical above-the-fold assets so initial entry is fast and responsive
+    // Preloads critical above-the-fold assets, plus ALL video animations and audios
+    // into browser memory/cache before loading completion to guarantee zero-latency playback.
     const criticalSiteImages = [
       hero1,
       aboutExterior,
       logo,
     ];
 
+    const allAvatarVideos = [
+      "/avatar-welcome.mp4",
+      "/avatar-about.mp4",
+      "/avatar-features.mp4",
+      "/avatar-events.mp4",
+      "/avatar-gallery.mp4",
+      "/avatar-testimonials.mp4",
+      "/avatar-location.mp4",
+      "/avatar-cta.mp4",
+      "/avatar-admin.mp4",
+      "/avatar-tour.mp4",
+      "/avatar-stats.mp4",
+    ];
+
+    const allAvatarAudios = [
+      "/audio/home.mp3",
+      "/audio/home-about.mp3",
+      "/audio/home-features.mp3",
+      "/audio/events.mp3",
+      "/audio/gallery.mp3",
+      "/audio/home-testimonials.mp3",
+      "/audio/contact.mp3",
+      "/audio/home-cta.mp3",
+      "/audio/admin.mp3",
+      "/audio/home-tour.mp3",
+      "/audio/home-stats.mp3",
+    ];
+
     let loadedCount = 0;
-    // Critical items: fold images (3) + preloader video stream + fonts + DOM = 6
-    const totalItems = criticalSiteImages.length + 3;
+    // Total: fold images (3) + all avatar videos (11) + all avatar audios (11) + preloader video (1) + fonts + DOM = 28
+    const totalItems = criticalSiteImages.length + allAvatarVideos.length + allAvatarAudios.length + 3;
 
     const checkItemLoaded = () => {
       loadedCount += 1;
@@ -235,14 +264,28 @@ export default function Preloader() {
       }
     });
 
-    // 3. Web Fonts Readiness
+    // 3. Preload ALL Video Animations into Browser HTTP / Blob Cache
+    allAvatarVideos.forEach((src) => {
+      fetch(src, { cache: "force-cache" })
+        .then(() => checkItemLoaded())
+        .catch(() => checkItemLoaded());
+    });
+
+    // 4. Preload ALL Audio Speech Tracks into Browser Cache
+    allAvatarAudios.forEach((src) => {
+      fetch(src, { cache: "force-cache" })
+        .then(() => checkItemLoaded())
+        .catch(() => checkItemLoaded());
+    });
+
+    // 5. Web Fonts Readiness
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(checkItemLoaded).catch(checkItemLoaded);
     } else {
       setTimeout(checkItemLoaded, 150);
     }
 
-    // 4. DOM / Document Readiness
+    // 6. DOM / Document Readiness
     if (document.readyState === "complete") {
       checkItemLoaded();
     } else {
@@ -253,7 +296,7 @@ export default function Preloader() {
     const maxSafetyTimeout = setTimeout(() => {
       allReadyRef.current = true;
       targetProgressRef.current = 100;
-    }, 2500);
+    }, 4000);
 
     // --- PROGRESS INTERPOLATOR & VIDEO ANIMATION LOOP ---
     let currentDisplayProgress = 0;
