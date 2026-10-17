@@ -65,7 +65,7 @@ const Facilities = () => (
       description="Lifts, AC halls, ample parking, generator backup, bridal rooms & kitchen. Every amenity for your wedding at A.R Grand, Kodungaiyur Chennai."
       path="/facilities"
     />
-    <section className="section-padding max-w-7xl mx-auto">
+    <section className="section-padding pb-36 sm:pb-28 md:pb-24 max-w-7xl mx-auto">
       <h1 className="heading-xl text-center text-foreground mb-4">Our Facilities</h1>
       <p className="text-body text-center text-muted-foreground mb-16 max-w-2xl mx-auto">
         A.R Grand is fully equipped with everything needed to host a flawless celebration — from comfort and convenience to safety and service.

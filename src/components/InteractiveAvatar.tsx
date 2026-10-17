@@ -726,10 +726,10 @@ export default function InteractiveAvatar() {
                 aria-label="Interactive Concierge"
                 className={`fixed bottom-2 sm:bottom-4 z-30 flex flex-col pointer-events-none select-none transition-all duration-700 ease-out ${
                     isCenter
-                        ? "left-[43%] sm:left-[44%] md:left-[45%] -translate-x-1/2 items-center"
+                        ? "left-1/2 -translate-x-1/2 items-center"
                         : isLeft
-                        ? "left-1 sm:left-2 md:left-3 lg:left-4 items-start"
-                        : "right-1 sm:right-3 md:right-4 lg:right-6 items-end"
+                        ? "left-2 sm:left-4 md:left-6 items-start"
+                        : "right-2 sm:right-4 md:right-6 items-end"
                 } ${
                     isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12 pointer-events-none"
                 }`}
@@ -738,7 +738,7 @@ export default function InteractiveAvatar() {
                 {isVisible && (
                     <div
                         className={`relative mb-1.5 pointer-events-auto transition-all duration-500 ease-out ${
-                            isCenter ? "mx-auto" : isLeft ? "ml-1" : "mr-1 sm:mr-2"
+                            isCenter ? "mx-auto" : isLeft ? "ml-1 sm:ml-2" : "mr-1 sm:mr-2"
                         } ${
                             isBubbleOpen
                                 ? "opacity-100 scale-100 translate-y-0"
@@ -748,7 +748,7 @@ export default function InteractiveAvatar() {
                         <div
                             onClick={handleAvatarClick}
                             title="Click to interact"
-                            className="relative max-w-[160px] sm:max-w-[185px] bg-card/95 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-[hsl(var(--gold)/0.45)] shadow-[var(--shadow-elegant)] flex items-start gap-1.5 cursor-pointer hover:border-[hsl(var(--gold))] group transition-all"
+                            className="relative max-w-[150px] sm:max-w-[185px] bg-card/95 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-[hsl(var(--gold)/0.45)] shadow-[var(--shadow-elegant)] flex items-start gap-1.5 cursor-pointer hover:border-[hsl(var(--gold))] group transition-all"
                         >
                             <p className="text-[10px] sm:text-[11px] text-foreground font-medium leading-snug flex-1 select-text">
                                 {currentText}
@@ -778,27 +778,19 @@ export default function InteractiveAvatar() {
                                     isCenter
                                         ? "left-1/2 -translate-x-1/2"
                                         : isLeft
-                                        ? "left-5 sm:left-6"
-                                        : "right-5 sm:right-6"
+                                        ? "left-6 sm:left-8"
+                                        : "right-6 sm:right-8"
                                 }`}
                             />
                         </div>
                     </div>
                 )}
 
-                {/* Character Stage - Sleek 3:4 Vertical Profile Utilizing Exact Empty Space */}
+                {/* Character Stage - Sleek 3:4 Vertical Profile Fully Visible Within Viewport */}
                 <div
                     onClick={handleAvatarClick}
                     title="Click the boy to speak"
-                    className={`relative w-28 sm:w-32 md:w-40 lg:w-44 xl:w-48 aspect-[3/4] cursor-pointer pointer-events-auto overflow-visible transition-all duration-300 ease-in-out translate-y-[0.6cm] ${
-                        isFacilities ? "translate-x-[1.5cm]" : ""
-                    } ${
-                        isGallery ? "translate-x-[0.8cm]" : ""
-                    } ${
-                        isHome ? "translate-x-[0.6cm]" : ""
-                    } ${
-                        isLeft ? "-translate-x-[1.5cm]" : ""
-                    }`}
+                    className="relative w-24 sm:w-28 md:w-36 lg:w-40 xl:w-44 aspect-[3/4] cursor-pointer pointer-events-auto overflow-visible transition-all duration-300 ease-in-out translate-y-0 sm:translate-y-1"
                 >
                     {/* 100% Pure Transparent WebGL Canvas (Optimized 480x640 Retina Resolution) */}
                     <canvas

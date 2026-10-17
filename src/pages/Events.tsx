@@ -174,7 +174,7 @@ const Events = () => {
         description="Check available wedding & event dates at A.R Grand Marriage Hall in Kodungaiyur, Chennai. Reserve your preferred date before it's booked."
         path="/events"
       />
-      <section className="px-4 pt-4 pb-16 md:px-8 md:pt-6 md:pb-24 lg:px-16 max-w-6xl mx-auto">
+      <section className="px-4 pt-4 pb-36 md:px-8 md:pt-6 md:pb-24 lg:px-16 max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-4">
           <h1 className="heading-xl text-foreground">Events & Availability</h1>
           {!adminLoading && (
