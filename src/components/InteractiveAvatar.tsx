@@ -176,16 +176,28 @@ export default function InteractiveAvatar() {
             }
         };
 
+        let hasTriggered = false;
+        const triggerSynchronized = () => {
+            if (hasTriggered || playRequestIdRef.current !== currentReqId) return;
+            hasTriggered = true;
+            startSynchronizedPlayback();
+        };
+
         if (video) {
             video.loop = false;
+            video.muted = true;
+            video.defaultMuted = true;
 
-            // AV Drift Lock: Keeps audio in microsecond sync with video frames
+            // AV Master Sync: Audio is the master clock. If video drifts, gently adjust video to match audio speech.
             video.ontimeupdate = () => {
                 const currentAudio = audioRef.current;
                 if (currentAudio && !currentAudio.paused && !video.paused) {
-                    const diff = Math.abs(currentAudio.currentTime - video.currentTime);
-                    if (diff > 0.18) {
-                        currentAudio.currentTime = video.currentTime;
+                    const diff = video.currentTime - currentAudio.currentTime;
+                    // Resync video to audio if out of sync by > 300ms, preserving uninterrupted crystal-clear audio
+                    if (Math.abs(diff) > 0.3) {
+                        try {
+                            video.currentTime = currentAudio.currentTime;
+                        } catch (_) {}
                     }
                 }
             };
@@ -205,16 +217,23 @@ export default function InteractiveAvatar() {
                 video.load();
             }
 
-            // Always verify video readyState before starting synchronized playback
+            // Low-bandwidth mobile guard: If video buffering takes > 350ms, start speech immediately
+            // so the mobile user gets an instant responsive voice without waiting on slow cellular buffers
+            const bandwidthFallbackTimer = setTimeout(() => {
+                if (!hasTriggered && playRequestIdRef.current === currentReqId) {
+                    triggerSynchronized();
+                }
+            }, 350);
+
             if (video.readyState >= 2) {
-                startSynchronizedPlayback();
+                clearTimeout(bandwidthFallbackTimer);
+                triggerSynchronized();
             } else {
                 const onCanPlay = () => {
                     video.removeEventListener("canplay", onCanPlay);
                     video.removeEventListener("loadeddata", onCanPlay);
-                    if (playRequestIdRef.current === currentReqId) {
-                        startSynchronizedPlayback();
-                    }
+                    clearTimeout(bandwidthFallbackTimer);
+                    triggerSynchronized();
                 };
                 video.addEventListener("canplay", onCanPlay, { once: true });
                 video.addEventListener("loadeddata", onCanPlay, { once: true });
@@ -367,30 +386,42 @@ export default function InteractiveAvatar() {
         canvas.addEventListener("webglcontextlost", handleContextLost, false);
         canvas.addEventListener("webglcontextrestored", handleContextRestored, false);
 
+        let lastFrameTime = -1;
         const render = () => {
             if (isCancelled) return;
             if (gl && program && quadBuffer && tex && video.readyState >= 2) {
-                try {
-                    gl.useProgram(program);
-                    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
-                    const posLoc = gl.getAttribLocation(program, "a_pos");
-                    const uvLoc = gl.getAttribLocation(program, "a_uv");
-                    gl.enableVertexAttribArray(posLoc);
-                    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
-                    gl.enableVertexAttribArray(uvLoc);
-                    gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 16, 8);
+                const curTime = video.currentTime;
+                const isNewFrame = curTime !== lastFrameTime;
 
-                    gl.activeTexture(gl.TEXTURE0);
-                    gl.bindTexture(gl.TEXTURE_2D, tex);
-                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
-                    const uVideoLoc = gl.getUniformLocation(program, "u_video");
-                    gl.uniform1i(uVideoLoc, 0);
+                if (!video.paused || isNewFrame) {
+                    try {
+                        gl.useProgram(program);
+                        gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+                        const posLoc = gl.getAttribLocation(program, "a_pos");
+                        const uvLoc = gl.getAttribLocation(program, "a_uv");
+                        gl.enableVertexAttribArray(posLoc);
+                        gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
+                        gl.enableVertexAttribArray(uvLoc);
+                        gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 16, 8);
 
-                    gl.viewport(0, 0, canvas.width, canvas.height);
-                    gl.clearColor(0, 0, 0, 0);
-                    gl.clear(gl.COLOR_BUFFER_BIT);
-                    gl.drawArrays(gl.TRIANGLES, 0, 6);
-                } catch (_) {}
+                        gl.activeTexture(gl.TEXTURE0);
+                        gl.bindTexture(gl.TEXTURE_2D, tex);
+
+                        // Only re-upload video pixel texture to GPU memory when timestamp changes
+                        if (isNewFrame) {
+                            lastFrameTime = curTime;
+                            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+                        }
+
+                        const uVideoLoc = gl.getUniformLocation(program, "u_video");
+                        gl.uniform1i(uVideoLoc, 0);
+
+                        gl.viewport(0, 0, canvas.width, canvas.height);
+                        gl.clearColor(0, 0, 0, 0);
+                        gl.clear(gl.COLOR_BUFFER_BIT);
+                        gl.drawArrays(gl.TRIANGLES, 0, 6);
+                    } catch (_) {}
+                }
             }
             animationFrameId = requestAnimationFrame(render);
         };
@@ -442,6 +473,45 @@ export default function InteractiveAvatar() {
             hasUserInteractedRef.current = true;
             setHasTouched(true);
 
+            // Synchronously unlock mobile iOS / Android audio & video context in user gesture stack
+            try {
+                let audio = audioRef.current;
+                if (!audio) {
+                    audio = new Audio();
+                    audio.preload = "auto";
+                    audioRef.current = audio;
+                }
+                if (!audio.src || audio.src === "") {
+                    audio.src = activeConfigRef.current.audioSrc || "/audio/home.mp3";
+                }
+                audio.muted = true;
+                const p = audio.play();
+                if (p !== undefined) {
+                    p.then(() => {
+                        audio?.pause();
+                        if (audio) {
+                            audio.muted = false;
+                            audio.currentTime = 0;
+                        }
+                    }).catch(() => {
+                        if (audio) audio.muted = false;
+                    });
+                }
+            } catch (_) {}
+
+            if (videoRef.current) {
+                try {
+                    videoRef.current.muted = true;
+                    videoRef.current.defaultMuted = true;
+                    const vp = videoRef.current.play();
+                    if (vp !== undefined) {
+                        vp.then(() => {
+                            videoRef.current?.pause();
+                        }).catch(() => {});
+                    }
+                } catch (_) {}
+            }
+
             window.removeEventListener("pointerdown", onFirstInteraction);
             window.removeEventListener("touchstart", onFirstInteraction);
             window.removeEventListener("scroll", onFirstInteraction);
@@ -458,7 +528,7 @@ export default function InteractiveAvatar() {
                 setIsBubbleOpen(true);
                 playConfig(activeConfigRef.current);
             } else {
-                setStage("hidden");
+                setStage("idle");
             }
         };
 
@@ -660,6 +730,13 @@ export default function InteractiveAvatar() {
     const handleAvatarClick = () => {
         hasUserInteractedRef.current = true;
         setHasTouched(true);
+        if (audioRef.current) {
+            audioRef.current.muted = false;
+        }
+        if (videoRef.current) {
+            videoRef.current.muted = true;
+            videoRef.current.defaultMuted = true;
+        }
         if (bubbleTimerRef.current) {
             clearTimeout(bubbleTimerRef.current);
             bubbleTimerRef.current = null;
@@ -781,28 +858,36 @@ export default function InteractiveAvatar() {
                         isLeft ? "-translate-x-[1.5cm]" : ""
                     }`}
                 >
-                    {/* 100% Pure Transparent WebGL Canvas */}
+                    {/* 100% Pure Transparent WebGL Canvas (Optimized 480x640 Retina Resolution) */}
                     <canvas
                         ref={canvasRef}
-                        width={810}
-                        height={1080}
+                        width={480}
+                        height={640}
                         className={`w-full h-full object-contain block bg-transparent border-0 outline-none shadow-none pointer-events-auto ${
                             isCenter ? "object-center" : isLeft ? "object-left" : "object-right"
                         }`}
                     />
 
-                    {/* Video Source - Streamlined H.264 Faststart */}
+                    {/* Video Source - Streamlined H.264 Faststart with Full iOS/Android Inline Attributes */}
                     <video
                         ref={videoRef}
+                        src="/avatar-welcome.mp4"
                         muted
                         playsInline
+                        // @ts-ignore
+                        webkit-playsinline="true"
+                        x5-playsinline="true"
+                        disablePictureInPicture
+                        disableRemotePlayback
                         preload="auto"
+                        crossOrigin="anonymous"
                         className="absolute inset-0 w-full h-full opacity-[0.001] pointer-events-none -z-10"
                     />
 
-                    {/* Natural Voice Audio Source */}
+                    {/* Natural Voice Audio Source Preloaded for Zero Delay */}
                     <audio
                         ref={audioRef}
+                        src="/audio/home.mp3"
                         preload="auto"
                         className="hidden"
                     />

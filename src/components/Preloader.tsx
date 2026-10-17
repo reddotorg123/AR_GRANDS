@@ -47,8 +47,8 @@ export default function Preloader() {
     let useWebGL = false;
 
     if (canvas) {
-      canvas.width = 720;
-      canvas.height = 1280;
+      canvas.width = 540;
+      canvas.height = 960;
 
       try {
         gl = canvas.getContext("webgl", {
@@ -375,8 +375,8 @@ export default function Preloader() {
         >
           <canvas
             ref={canvasRef}
-            width={720}
-            height={1280}
+            width={540}
+            height={960}
             className="w-full h-full object-contain block select-none"
             style={{
               filter: "drop-shadow(0 8px 24px rgba(163, 124, 42, 0.14))",
