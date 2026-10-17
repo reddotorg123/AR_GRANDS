@@ -34,20 +34,8 @@ const AdminLogin = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const enterDemoAdmin = () => {
-    localStorage.setItem("ar_grand_demo_admin", "true");
-    toast({ title: "Welcome, Admin!", description: "Accessing venue management dashboard (Demo Mode)" });
-    navigate("/admin/dashboard");
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Check for quick demo / prototype credentials
-    if (email.trim().toLowerCase() === "admin@argrand.com" && password === "Admin@12345") {
-      enterDemoAdmin();
-      return;
-    }
 
     const result = loginSchema.safeParse({ email, password });
     if (!result.success) {
@@ -93,7 +81,7 @@ const AdminLogin = () => {
     }
 
     toast({ title: "Welcome, Admin!" });
-    navigate("/admin/dashboard");
+    navigate("/events");
     setLoading(false);
   };
 
@@ -101,33 +89,12 @@ const AdminLogin = () => {
     <div className="pt-20 min-h-screen bg-background">
       <section className="section-padding max-w-md mx-auto">
         <h1 className="heading-xl text-center text-foreground mb-8">Admin Login</h1>
-
-        {/* Demo / Prototype Credentials Card */}
-        <div className="mb-6 bg-card border border-primary/30 rounded-xl p-5 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wider font-semibold text-primary">Prototype & Demo Credentials</span>
-            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-mono font-medium">Ready</span>
-          </div>
-          <div className="text-xs space-y-1 text-muted-foreground font-body">
-            <div><strong>ID (Email):</strong> <code className="text-foreground bg-muted px-1.5 py-0.5 rounded">admin@argrand.com</code></div>
-            <div><strong>Password:</strong> <code className="text-foreground bg-muted px-1.5 py-0.5 rounded">Admin@12345</code></div>
-          </div>
-          <button
-            type="button"
-            onClick={enterDemoAdmin}
-            className="w-full py-2.5 px-4 rounded-lg bg-primary/15 hover:bg-primary text-primary hover:text-primary-foreground font-body text-xs font-semibold tracking-wide transition-all border border-primary/30 flex items-center justify-center gap-2"
-          >
-            ⚡ One-Click Demo Admin Login
-          </button>
-        </div>
-
         <form onSubmit={handleLogin} className="space-y-6 bg-card p-8 rounded-xl border border-border">
           <div>
             <label className="font-body text-sm text-muted-foreground block mb-2">Email</label>
             <input
               type="email"
               value={email}
-              placeholder="admin@argrand.com"
               onChange={(e) => setEmail(e.target.value)}
               required
               maxLength={255}
@@ -140,7 +107,6 @@ const AdminLogin = () => {
             <input
               type="password"
               value={password}
-              placeholder="Admin@12345"
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}

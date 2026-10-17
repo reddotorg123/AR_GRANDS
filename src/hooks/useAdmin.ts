@@ -8,13 +8,6 @@ export const useAdmin = () => {
 
   useEffect(() => {
     const checkAdmin = async () => {
-      if (localStorage.getItem("ar_grand_demo_admin") === "true") {
-        setIsAdmin(true);
-        setUserId("demo-admin-id");
-        setLoading(false);
-        return;
-      }
-
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
         setIsAdmin(false);
@@ -44,7 +37,6 @@ export const useAdmin = () => {
   }, []);
 
   const logout = async () => {
-    localStorage.removeItem("ar_grand_demo_admin");
     await supabase.auth.signOut();
     setIsAdmin(false);
     setUserId(null);
