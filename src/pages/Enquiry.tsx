@@ -20,15 +20,38 @@ const Enquiry = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === "phone") {
+      // Strictly allow numbers only, max 10 digits
+      const digitsOnly = value.replace(/\D/g, "").slice(0, 10);
+      setForm({ ...form, phone: digitsOnly });
+      return;
+    }
+    if (name === "name") {
+      // Allow only letters, spaces, dots, and hyphens (no numbers or random symbols)
+      const cleanName = value.replace(/[^a-zA-Z\s.-]/g, "").slice(0, 60);
+      setForm({ ...form, name: cleanName });
+      return;
+    }
+    setForm({ ...form, [name]: value });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.phone || !form.date || !form.functionType || !form.capacity) {
+    if (!form.name.trim() || !form.phone || !form.date || !form.functionType || !form.capacity) {
       toast({ title: "Please fill all required fields", variant: "destructive" });
       return;
     }
+
+    if (form.phone.length !== 10) {
+      toast({
+        title: "Invalid Phone Number",
+        description: "Please enter a valid 10-digit mobile number (e.g. 9876543210).",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSubmitting(true);
     const enquiryId = crypto.randomUUID();
     const templateData = { ...form };
@@ -76,6 +99,7 @@ const Enquiry = () => {
 
   const inputClass = "w-full px-4 py-3 rounded-md border border-border bg-background text-foreground font-body text-sm focus:outline-none focus:ring-2 focus:ring-ring";
   const labelClass = "block font-body text-sm font-semibold text-foreground mb-1";
+  const todayStr = new Date().toISOString().split("T")[0];
 
   return (
     <div className="pt-20">
@@ -94,11 +118,25 @@ const Enquiry = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className={labelClass}>Name *</label>
-              <input name="name" value={form.name} onChange={handleChange} className={inputClass} placeholder="Your full name" maxLength={100} />
+              <input name="name" value={form.name} onChange={handleChange} className={inputClass} placeholder="Your full name" maxLength={60} required />
             </div>
             <div>
-              <label className={labelClass}>Phone *</label>
-              <input name="phone" type="tel" value={form.phone} onChange={handleChange} className={inputClass} placeholder="+91 XXXXX XXXXX" maxLength={15} />
+              <label className={labelClass}>Phone (10 Digits) *</label>
+              <input
+                name="phone"
+                type="tel"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={form.phone}
+                onChange={handleChange}
+                className={inputClass}
+                placeholder="10-digit mobile number"
+                maxLength={10}
+                required
+              />
+              <span className="text-[11px] text-muted-foreground mt-1 block">
+                Digits only (e.g., 9876543210) — {form.phone.length}/10
+              </span>
             </div>
             <div>
               <label className={labelClass}>Email</label>
@@ -106,7 +144,7 @@ const Enquiry = () => {
             </div>
             <div>
               <label className={labelClass}>Event Date *</label>
-              <input name="date" type="date" value={form.date} onChange={handleChange} className={inputClass} />
+              <input name="date" type="date" min={todayStr} value={form.date} onChange={handleChange} className={inputClass} required />
             </div>
             <div>
               <label className={labelClass}>Preferred Time</label>

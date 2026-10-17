@@ -19,6 +19,7 @@ const Terms = lazy(() => import("./pages/Terms"));
 const Events = lazy(() => import("./pages/Events"));
 const Facilities = lazy(() => import("./pages/Facilities"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const PerumburPage = lazy(() => import("./pages/LocationPage").then(m => ({ default: m.PerumburPage })));
 const VyasarpadiPage = lazy(() => import("./pages/LocationPage").then(m => ({ default: m.VyasarpadiPage })));
 const MadhavaramPage = lazy(() => import("./pages/LocationPage").then(m => ({ default: m.MadhavaramPage })));
@@ -57,6 +58,7 @@ const App = () => (
             <Route path="/events" element={<Events />} />
             <Route path="/facilities" element={<Facilities />} />
             <Route path="/admin" element={<AdminLogin />} />
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/locations/perambur" element={<PerumburPage />} />
             <Route path="/locations/vyasarpadi" element={<VyasarpadiPage />} />
             <Route path="/locations/madhavaram" element={<MadhavaramPage />} />

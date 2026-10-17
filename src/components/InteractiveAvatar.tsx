@@ -672,7 +672,7 @@ export default function InteractiveAvatar() {
         playConfig(activeConfigRef.current);
     };
 
-    if (location.pathname === "/qr-scan" || location.pathname === "/qr" || location.pathname === "/terms") return null;
+    if (location.pathname.startsWith("/admin") || location.pathname === "/qr-scan" || location.pathname === "/qr" || location.pathname === "/terms") return null;
 
     // Visible on interaction when speaking or in friendly idle state
     const isVisible = hasTouched && (stage === "entering" || stage === "speaking" || stage === "idle") && !isFormActive;

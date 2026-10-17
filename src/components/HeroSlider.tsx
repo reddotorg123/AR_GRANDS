@@ -15,11 +15,11 @@ import "swiper/css/navigation";
 import "swiper/css/pagination";
 
 const slides = [
-  { image: hero1, eyebrow: "A.R Grand · Kodungaiyur", title: "Where Dreams Come True", subtitle: "Celebrate your special day in timeless elegance" },
+  { image: hero5, eyebrow: "A.R Grand · Kodungaiyur", title: "Where Dreams Come True", subtitle: "Celebrate your special day in timeless luxury and elegance" },
   { image: hero2, eyebrow: "Signature Celebrations", title: "Elegant Moments, Crafted", subtitle: "Stunning décor and world-class hospitality" },
   { image: hero3, eyebrow: "Grand Wedding Halls", title: "A Stage For Forever", subtitle: "Spacious seating with breathtaking stage settings" },
   { image: hero4, eyebrow: "Intimate to Grand", title: "Unforgettable Moments", subtitle: "Capacity for 50 to 250 distinguished guests" },
-  { image: hero5, eyebrow: "Premium Ambience", title: "Refined Interiors", subtitle: "Fully air-conditioned with bespoke detailing" },
+  { image: hero1, eyebrow: "Premium Venue", title: "Architectural Grandeur", subtitle: "Fully air-conditioned landmark venue in North Chennai" },
 ];
 
 const HeroSlider = () => {

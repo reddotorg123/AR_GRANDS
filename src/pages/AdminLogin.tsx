@@ -81,7 +81,7 @@ const AdminLogin = () => {
     }
 
     toast({ title: "Welcome, Admin!" });
-    navigate("/events");
+    navigate("/admin/dashboard");
     setLoading(false);
   };
 

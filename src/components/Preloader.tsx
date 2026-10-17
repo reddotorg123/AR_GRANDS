@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import hero1 from "@/assets/hero-1.jpg";
+import hero5 from "@/assets/hero-5.jpg";
 import aboutExterior from "@/assets/about-exterior.jpg";
 import logo from "@/assets/logo.png";
 
@@ -172,7 +172,7 @@ export default function Preloader() {
     // Preloads critical above-the-fold assets, plus ALL video animations and audios
     // into browser memory/cache before loading completion to guarantee zero-latency playback.
     const criticalSiteImages = [
-      hero1,
+      hero5,
       aboutExterior,
       logo,
     ];
