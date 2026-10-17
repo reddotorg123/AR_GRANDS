@@ -36,23 +36,14 @@ const routeAvatarConfigs: Record<string, AvatarConfig> = {
     "/locations/madhavaram": { videoSrc: "/avatar-location.mp4", audioSrc: "/audio/madhavaram.mp3", text: "Easily accessible venues across North Chennai with ample parking." }
 };
 
-const homeSections: Record<string, AvatarConfig> = {
-    hero: { text: "Welcome to A.R. Grand! Explore our luxury halls.", videoSrc: "/avatar-welcome.mp4", audioSrc: "/audio/home.mp3" },
-    about: { text: "Timeless elegance in Kodungaiyur, crafted for your special day.", videoSrc: "/avatar-about.mp4", audioSrc: "/audio/home-about.mp3" },
-    stats: { text: "Over 500 celebrations with seating for 250 guests.", videoSrc: "/avatar-stats.mp4", audioSrc: "/audio/home-stats.mp3" },
-    features: { text: "Air-conditioned halls, premium dining, and private bridal suites await you.", videoSrc: "/avatar-features.mp4", audioSrc: "/audio/home-features.mp3" },
-    tour: { text: "Step inside and take a 360 virtual tour.", videoSrc: "/avatar-tour.mp4", audioSrc: "/audio/home-tour.mp3" },
-    testimonials: { text: "Loved by hundreds of happy families across Chennai.", videoSrc: "/avatar-testimonials.mp4", audioSrc: "/audio/home-testimonials.mp3" },
-    cta: { text: "Ready to celebrate? Book your dream date today.", videoSrc: "/avatar-cta.mp4", audioSrc: "/audio/home-cta.mp3" }
-};
-
-// Tracks all sections & routes that have already played during this browser session.
-// Cleared automatically on page reload so animations run strictly ONCE until the next reload.
-const playedKeys = new Set<string>();
+// Global in-memory session flag: video plays strictly ONCE across the entire site visit.
+// Cleared automatically only on page reload so animations run strictly ONCE until the next reload.
+let sessionVideoPlayed = false;
 
 export default function InteractiveAvatar() {
-    // Initial state: hidden until dwell condition (60ms) is met
-    const [stage, setStage] = useState<"hidden" | "entering" | "waiting" | "speaking" | "idle" | "rejected">("hidden");
+    // Session single-play gate
+    const [hasPlayed, setHasPlayed] = useState(sessionVideoPlayed);
+    const [stage, setStage] = useState<"hidden" | "entering" | "waiting" | "speaking">("hidden");
     const [isMuted, setIsMuted] = useState(false);
     const [, setAudioBlocked] = useState(false);
     const [currentText, setCurrentText] = useState("Welcome to A.R. Grand! Explore our luxury halls.");
@@ -66,15 +57,12 @@ export default function InteractiveAvatar() {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const isMutedRef = useRef(false);
     const activeConfigRef = useRef<AvatarConfig>(routeAvatarConfigs["/"]);
-    const activeHomeSectionRef = useRef<string | null>(null);
 
     // Concurrency Token: Ensures rapid switching NEVER triggers stale video/audio events
     const playRequestIdRef = useRef(0);
 
-    // Audio & Scroll Queue Controls: Speech finishes before next clip; no rapid scroll conflicts
+    // Audio & Queue Controls
     const isSpeakingRef = useRef(false);
-    const pendingSectionRef = useRef<AvatarConfig | null>(null);
-    const scrollDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Dwell condition controls: 60ms quick non-blocking emergence
@@ -85,7 +73,6 @@ export default function InteractiveAvatar() {
     const stopSpeech = useCallback(() => {
         playRequestIdRef.current += 1;
         isSpeakingRef.current = false;
-        pendingSectionRef.current = null;
         if (bubbleTimerRef.current) {
             clearTimeout(bubbleTimerRef.current);
             bubbleTimerRef.current = null;
@@ -103,8 +90,25 @@ export default function InteractiveAvatar() {
         }
     }, []);
 
+    // Once played, avatar disappears completely and does not appear again until page reload
+    const finishVideoPermanently = useCallback(() => {
+        sessionVideoPlayed = true;
+        setHasPlayed(true);
+        setIsBubbleOpen(false);
+        setStage("hidden");
+        stopSpeech();
+        if (videoRef.current) {
+            try {
+                videoRef.current.pause();
+                videoRef.current.currentTime = 0;
+            } catch (_) {}
+        }
+    }, [stopSpeech]);
+
     // Controlled video and calibrated voice playback with atomic synchronization
     const playConfig = useCallback((config: AvatarConfig) => {
+        if (sessionVideoPlayed) return;
+
         playRequestIdRef.current += 1;
         const currentReqId = playRequestIdRef.current;
 
@@ -145,9 +149,8 @@ export default function InteractiveAvatar() {
                     clearTimeout(bubbleTimerRef.current);
                 }
                 bubbleTimerRef.current = setTimeout(() => {
-                    setIsBubbleOpen(false);
-                    setStage("idle");
-                }, 1200);
+                    finishVideoPermanently();
+                }, 600);
             };
         }
 
@@ -175,8 +178,7 @@ export default function InteractiveAvatar() {
                 if (playRequestIdRef.current !== currentReqId) return;
                 video.pause();
                 if (!isSpeakingRef.current) {
-                    setIsBubbleOpen(false);
-                    setStage("idle");
+                    finishVideoPermanently();
                 }
             };
 
@@ -209,12 +211,11 @@ export default function InteractiveAvatar() {
                 isSpeakingRef.current = false;
                 if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
                 bubbleTimerRef.current = setTimeout(() => {
-                    setIsBubbleOpen(false);
-                    setStage("idle");
+                    finishVideoPermanently();
                 }, 2500);
             }
         }
-    }, []);
+    }, [finishVideoPermanently]);
 
     // Form input avoidance: When an input, textarea, or form is active, fade out avatar to avoid blocking
     useEffect(() => {
@@ -439,9 +440,12 @@ export default function InteractiveAvatar() {
         };
     }, [stage]);
 
-    // Start animation & speech only after user touches or interacts with the page
+    // Start animation & speech strictly ONCE after first user interaction
     useEffect(() => {
+        if (sessionVideoPlayed || hasPlayed) return;
+
         const onFirstInteraction = () => {
+            if (sessionVideoPlayed || hasPlayed) return;
             if (isExcludedRoute(location.pathname)) return;
             if (hasUserInteractedRef.current) return;
             hasUserInteractedRef.current = true;
@@ -452,19 +456,9 @@ export default function InteractiveAvatar() {
             window.removeEventListener("scroll", onFirstInteraction);
             window.removeEventListener("keydown", onFirstInteraction);
 
-            // Directly play route speech and animation on first user interaction
-            const routeKey = "route:" + location.pathname;
-            if (!playedKeys.has(routeKey)) {
-                playedKeys.add(routeKey);
-                if (location.pathname === "/") {
-                    playedKeys.add("home:hero");
-                }
-                setStage("speaking");
-                setIsBubbleOpen(true);
-                playConfig(activeConfigRef.current);
-            } else {
-                setStage("idle");
-            }
+            setStage("speaking");
+            setIsBubbleOpen(true);
+            playConfig(activeConfigRef.current);
         };
 
         window.addEventListener("pointerdown", onFirstInteraction, { passive: true });
@@ -478,12 +472,17 @@ export default function InteractiveAvatar() {
             window.removeEventListener("scroll", onFirstInteraction);
             window.removeEventListener("keydown", onFirstInteraction);
         };
-    }, [location.pathname, playConfig]);
+    }, [hasPlayed, location.pathname, playConfig]);
 
-    // Route Switching & Dwell Timing:
-    // Keeps avatar completely INVISIBLE until user touch is triggered,
-    // and stays strictly HIDDEN once played (or when switching back to visited tabs)
+    // Route Switching: If video already played once this session, keep strictly hidden
     useEffect(() => {
+        if (sessionVideoPlayed || hasPlayed) {
+            setStage("hidden");
+            setIsBubbleOpen(false);
+            stopSpeech();
+            return;
+        }
+
         if (dwellTimerRef.current) {
             clearTimeout(dwellTimerRef.current);
             dwellTimerRef.current = null;
@@ -509,9 +508,6 @@ export default function InteractiveAvatar() {
         activeConfigRef.current = config;
         setCurrentText(config.text);
 
-        const routeKey = "route:" + location.pathname;
-        const alreadyPlayed = playedKeys.has(routeKey);
-
         // Preload video source for this page so canvas is ready when needed
         const video = videoRef.current;
         if (video) {
@@ -521,135 +517,10 @@ export default function InteractiveAvatar() {
                 video.load();
             }
         }
-
-        // 200 millisecond waiting time for clean non-intrusive emergence
-        dwellTimerRef.current = setTimeout(() => {
-            dwellSatisfiedRef.current = true;
-
-            // If user has NOT touched the page yet, stay completely INVISIBLE!
-            if (!hasUserInteractedRef.current) {
-                setStage("hidden");
-                setIsBubbleOpen(false);
-                if (videoRef.current) {
-                    videoRef.current.pause();
-                }
-                return;
-            }
-
-            // User has touched the page:
-            if (alreadyPlayed) {
-                // Settle into idle state so avatar remains visible and clickable without re-triggering speech automatically
-                setStage("idle");
-                setIsBubbleOpen(false);
-            } else {
-                playedKeys.add(routeKey);
-                if (location.pathname === "/") {
-                    playedKeys.add("home:hero");
-                }
-                setStage("speaking");
-                setIsBubbleOpen(true);
-                playConfig(activeConfigRef.current);
-            }
-        }, DWELL_TIME_MS);
-
-        return () => {
-            if (dwellTimerRef.current) {
-                clearTimeout(dwellTimerRef.current);
-                dwellTimerRef.current = null;
-            }
-        };
-    }, [location.pathname, stopSpeech, playConfig]);
-
-    // Section Scroll Observer with Settling Debounce:
-    // Rapid scrolling does NOT trigger repeated playback.
-    // Runs strictly ONCE per section until the next reload.
-    useEffect(() => {
-        if (location.pathname !== "/") return;
-
-        const checkScrollSection = () => {
-            if (!dwellSatisfiedRef.current) return;
-
-            const sections = document.querySelectorAll<HTMLElement>("[data-section]");
-            if (!sections.length) return;
-
-            const targetY = window.innerHeight * 0.45;
-            let matchedSection: string | null = null;
-            let closestDist = Infinity;
-
-            sections.forEach((sec) => {
-                const rect = sec.getBoundingClientRect();
-                const key = sec.dataset.section;
-                if (!key) return;
-
-                if (rect.top <= targetY && rect.bottom >= targetY) {
-                    matchedSection = key;
-                } else if (rect.bottom > 0 && rect.top < window.innerHeight) {
-                    const dist = Math.abs(rect.top - targetY);
-                    if (dist < closestDist) {
-                        closestDist = dist;
-                        matchedSection = key;
-                    }
-                }
-            });
-
-            if (matchedSection) {
-                const sectionKey = "home:" + matchedSection;
-                // Run strictly ONCE per session until reload
-                if (playedKeys.has(sectionKey)) {
-                    return;
-                }
-
-                const config = homeSections[matchedSection];
-                if (config) {
-                    hasUserInteractedRef.current = true;
-                    setHasTouched(true);
-                    playedKeys.add(sectionKey);
-                    activeHomeSectionRef.current = matchedSection;
-                    stopSpeech();
-                    setStage("speaking");
-                    setIsBubbleOpen(true);
-                    playConfig(config);
-                }
-            }
-        };
-
-        const handleScroll = () => {
-            if (scrollDebounceTimerRef.current) {
-                clearTimeout(scrollDebounceTimerRef.current);
-            }
-            // 200ms settling timer: quick and responsive section introduction
-            scrollDebounceTimerRef.current = setTimeout(() => {
-                checkScrollSection();
-            }, 200);
-        };
-
-        window.addEventListener("scroll", handleScroll, { passive: true });
-
-        return () => {
-            if (scrollDebounceTimerRef.current) {
-                clearTimeout(scrollDebounceTimerRef.current);
-            }
-            window.removeEventListener("scroll", handleScroll);
-            activeHomeSectionRef.current = null;
-        };
-    }, [location.pathname, playConfig, stopSpeech]);
+    }, [hasPlayed, location.pathname, stopSpeech]);
 
     const handleDismiss = () => {
-        stopSpeech();
-        if (videoRef.current) {
-            videoRef.current.pause();
-        }
-        if (dwellTimerRef.current) {
-            clearTimeout(dwellTimerRef.current);
-            dwellTimerRef.current = null;
-        }
-        if (bubbleTimerRef.current) {
-            clearTimeout(bubbleTimerRef.current);
-            bubbleTimerRef.current = null;
-        }
-        dwellSatisfiedRef.current = false;
-        setIsBubbleOpen(false);
-        setStage("hidden");
+        finishVideoPermanently();
     };
 
     const toggleMute = () => {
@@ -670,6 +541,7 @@ export default function InteractiveAvatar() {
         if (e) {
             e.stopPropagation();
         }
+        if (sessionVideoPlayed || hasPlayed) return;
         hasUserInteractedRef.current = true;
         setHasTouched(true);
         if (audioRef.current) {
@@ -688,10 +560,11 @@ export default function InteractiveAvatar() {
         playConfig(activeConfigRef.current);
     };
 
-    if (isExcludedRoute(location.pathname)) return null;
+    // If video has already played once in this session, do not render or appear again until reload
+    if (sessionVideoPlayed || hasPlayed || isExcludedRoute(location.pathname)) return null;
 
-    // Visible on interaction when speaking or in friendly idle state
-    const isVisible = hasTouched && (stage === "entering" || stage === "speaking" || stage === "idle") && !isFormActive;
+    // Visible strictly while speaking on the single play
+    const isVisible = !sessionVideoPlayed && !hasPlayed && hasTouched && stage === "speaking" && !isFormActive;
 
     // Route-specific placement to utilize empty space:
     // - On /contact: Position in the MIDDLE part between contact details and the map (as marked in red)
@@ -704,24 +577,6 @@ export default function InteractiveAvatar() {
 
     return (
         <>
-            {/* Quick Re-open Virtual Concierge Pill when dismissed */}
-            {hasTouched && stage === "hidden" && !isFormActive && (
-                <button
-                    onClick={handleAvatarClick}
-                    className={`fixed bottom-3 z-30 flex items-center gap-2 px-3.5 py-2 rounded-full bg-card/95 backdrop-blur-md border border-[hsl(var(--gold)/0.5)] shadow-[var(--shadow-elegant)] text-foreground text-xs font-semibold hover:border-[hsl(var(--gold))] hover:scale-105 active:scale-95 transition-all cursor-pointer group ${
-                        isLeft ? "left-3 sm:left-6" : "right-3 sm:right-6"
-                    }`}
-                    title="Click to speak with Virtual Concierge"
-                    aria-label="Open Virtual Concierge"
-                >
-                    <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[hsl(var(--gold))] opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[hsl(var(--gold))]"></span>
-                    </span>
-                    <span className="gold-text tracking-wider uppercase text-[10px]">Virtual Concierge</span>
-                </button>
-            )}
-
             <aside
                 aria-label="Interactive Concierge"
                 className={`fixed bottom-2 sm:bottom-4 z-30 flex flex-col pointer-events-none select-none transition-all duration-700 ease-out ${
