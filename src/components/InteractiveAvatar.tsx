@@ -203,22 +203,21 @@ export default function InteractiveAvatar() {
                 video.pause();
                 video.src = config.videoSrc;
                 video.load();
+            }
 
-                // Wait until video has loaded enough data to play smoothly
+            // Always verify video readyState before starting synchronized playback
+            if (video.readyState >= 2) {
+                startSynchronizedPlayback();
+            } else {
                 const onCanPlay = () => {
                     video.removeEventListener("canplay", onCanPlay);
                     video.removeEventListener("loadeddata", onCanPlay);
-                    startSynchronizedPlayback();
+                    if (playRequestIdRef.current === currentReqId) {
+                        startSynchronizedPlayback();
+                    }
                 };
-
-                if (video.readyState >= 2) {
-                    startSynchronizedPlayback();
-                } else {
-                    video.addEventListener("canplay", onCanPlay, { once: true });
-                    video.addEventListener("loadeddata", onCanPlay, { once: true });
-                }
-            } else {
-                startSynchronizedPlayback();
+                video.addEventListener("canplay", onCanPlay, { once: true });
+                video.addEventListener("loadeddata", onCanPlay, { once: true });
             }
         } else {
             startSynchronizedPlayback();
