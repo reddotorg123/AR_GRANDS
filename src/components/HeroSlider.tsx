@@ -53,7 +53,9 @@ const HeroSlider = () => {
                   className="w-full h-full object-cover"
                   width={1920}
                   height={1080}
-                  {...(i === 0 ? {} : { loading: "lazy" as const })}
+                  loading={i === 0 ? "eager" : "lazy"}
+                  decoding="async"
+                  {...(i === 0 ? { fetchPriority: "high" as any } : {})}
                 />
               </div>
               {/* Cinematic overlays */}

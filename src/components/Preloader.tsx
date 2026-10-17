@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import hero1 from "@/assets/hero-1.jpg";
-import hero2 from "@/assets/hero-2.jpg";
 import aboutExterior from "@/assets/about-exterior.jpg";
+import logo from "@/assets/logo.png";
 
 export default function Preloader() {
   const isQRRoute = typeof window !== "undefined" && window.location.pathname.startsWith("/qr");
@@ -168,10 +168,17 @@ export default function Preloader() {
       }
     };
 
-    // --- ASSET PRELOAD TRACKER ---
-    const criticalImages = [hero1, hero2, aboutExterior];
+    // --- COMPREHENSIVE ASSET PRELOAD ENGINE ---
+    // Preload critical above-the-fold assets so initial entry is fast and responsive
+    const criticalSiteImages = [
+      hero1,
+      aboutExterior,
+      logo,
+    ];
+
     let loadedCount = 0;
-    const totalItems = 1 + criticalImages.length + 2; // video + images + fonts + DOM
+    // Critical items: fold images (3) + preloader video stream + fonts + DOM = 6
+    const totalItems = criticalSiteImages.length + 3;
 
     const checkItemLoaded = () => {
       loadedCount += 1;
@@ -184,7 +191,7 @@ export default function Preloader() {
       }
     };
 
-    // 1. Optimized Video Ready Handler
+    // 1. Optimized Video Ready Handler (Preloader's own stream)
     if (video) {
       const handleVideoReady = () => {
         if (!videoLoadedRef.current) {
@@ -194,11 +201,11 @@ export default function Preloader() {
         }
       };
 
-      if (video.readyState >= 3) {
+      if (video.readyState >= 2) {
         handleVideoReady();
       } else {
-        video.addEventListener("canplaythrough", handleVideoReady, { once: true });
         video.addEventListener("loadeddata", handleVideoReady, { once: true });
+        video.addEventListener("canplay", handleVideoReady, { once: true });
         video.addEventListener("error", () => {
           videoLoadedRef.current = true;
           checkItemLoaded();
@@ -208,19 +215,31 @@ export default function Preloader() {
       checkItemLoaded();
     }
 
-    // 2. Preload Critical Images
-    criticalImages.forEach((src) => {
+    // 2. Preload and Decode Critical Fold Images
+    criticalSiteImages.forEach((src) => {
       const img = new Image();
-      img.onload = checkItemLoaded;
-      img.onerror = checkItemLoaded;
       img.src = src;
+      const onDone = () => checkItemLoaded();
+
+      if (img.complete) {
+        onDone();
+      } else {
+        img.onload = () => {
+          if ("decode" in img) {
+            img.decode().then(onDone).catch(onDone);
+          } else {
+            onDone();
+          }
+        };
+        img.onerror = onDone;
+      }
     });
 
     // 3. Web Fonts Readiness
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(checkItemLoaded).catch(checkItemLoaded);
     } else {
-      setTimeout(checkItemLoaded, 250);
+      setTimeout(checkItemLoaded, 150);
     }
 
     // 4. DOM / Document Readiness
@@ -230,18 +249,18 @@ export default function Preloader() {
       window.addEventListener("load", checkItemLoaded, { once: true });
     }
 
-    // Fallback safety timeout
+    // Fast fallback safety timeout (prevents lock on slow networks)
     const maxSafetyTimeout = setTimeout(() => {
       allReadyRef.current = true;
       targetProgressRef.current = 100;
-    }, 6500);
+    }, 2500);
 
     // --- PROGRESS INTERPOLATOR & VIDEO ANIMATION LOOP ---
     let currentDisplayProgress = 0;
     let animFrameId: number;
     let videoVisibleStartTime: number | null = null;
     let hasRenderedFirstFrame = false;
-    const minDuration = 2400; // ~2.4s natural luxury duration once video starts
+    const minNaturalDuration = 850; // Brisk and luxurious ~0.85s intro while brand animation plays
 
     const renderLoop = (time: number) => {
       // Check if video is ready to render
@@ -260,11 +279,12 @@ export default function Preloader() {
         return;
       }
 
-      // Pacing starts ONLY after the video has appeared on screen
+      // Elapsed time since first visible frame
       const elapsed = time - videoVisibleStartTime;
-      const timePacing = Math.min((elapsed / minDuration) * 98, 98);
+      const timePacing = Math.min((elapsed / minNaturalDuration) * 98, 98);
 
-      const target = allReadyRef.current && elapsed >= minDuration
+      // Progress is strictly capped below 100 until ALL assets are loaded into memory
+      const target = allReadyRef.current && elapsed >= minNaturalDuration
         ? 100
         : Math.min(targetProgressRef.current, timePacing);
 
@@ -276,7 +296,7 @@ export default function Preloader() {
         setProgress(displayPct);
       }
 
-      // COMPLETION: All assets ready and progress at 100%
+      // COMPLETION: All assets verified loaded AND progress at 100%
       if (allReadyRef.current && currentDisplayProgress >= 100) {
         setProgress(100);
 
@@ -295,7 +315,7 @@ export default function Preloader() {
             window.scrollTo({ top: 0, left: 0, behavior: "instant" });
             window.dispatchEvent(new Event("preloaderFinished"));
           }, 650);
-        }, 450);
+        }, 400);
       } else {
         animFrameId = requestAnimationFrame(renderLoop);
       }

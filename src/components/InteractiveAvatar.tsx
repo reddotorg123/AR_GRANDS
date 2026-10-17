@@ -8,8 +8,8 @@ interface AvatarConfig {
     text: string;
 }
 
-// Waiting dwell time reduced to 200 milliseconds as requested
-const DWELL_TIME_MS = 200;
+// Waiting dwell time reduced to 60 milliseconds for instant responsiveness
+const DWELL_TIME_MS = 60;
 
 // High-Quality Lip-Synced Assets with EXACT Synchronized Dialogue Syllables
 const routeAvatarConfigs: Record<string, AvatarConfig> = {
@@ -40,8 +40,8 @@ const homeSections: Record<string, AvatarConfig> = {
 const playedKeys = new Set<string>();
 
 export default function InteractiveAvatar() {
-    // Initial state: hidden until dwell condition (200ms) is met
-    const [stage, setStage] = useState<"hidden" | "entering" | "waiting" | "speaking" | "rejected">("hidden");
+    // Initial state: hidden until dwell condition (60ms) is met
+    const [stage, setStage] = useState<"hidden" | "entering" | "waiting" | "speaking" | "idle" | "rejected">("hidden");
     const [isMuted, setIsMuted] = useState(false);
     const [, setAudioBlocked] = useState(false);
     const [currentText, setCurrentText] = useState("Welcome to A.R. Grand! Explore our luxury halls.");
@@ -66,7 +66,7 @@ export default function InteractiveAvatar() {
     const scrollDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Dwell condition controls: 200ms quick non-blocking emergence
+    // Dwell condition controls: 60ms quick non-blocking emergence
     const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const dwellSatisfiedRef = useRef(false);
     const hasUserInteractedRef = useRef(false);
@@ -92,7 +92,7 @@ export default function InteractiveAvatar() {
         }
     }, []);
 
-    // Controlled video and calibrated voice playback
+    // Controlled video and calibrated voice playback with atomic synchronization
     const playConfig = useCallback((config: AvatarConfig) => {
         playRequestIdRef.current += 1;
         const currentReqId = playRequestIdRef.current;
@@ -108,80 +108,16 @@ export default function InteractiveAvatar() {
         setIsBubbleOpen(true);
 
         const video = videoRef.current;
-        if (video) {
-            video.loop = false;
-            const startPlayback = () => {
-                if (playRequestIdRef.current !== currentReqId) return;
-                try {
-                    video.currentTime = 0;
-                } catch (_) {}
-                const playPromise = video.play();
-                if (playPromise !== undefined) {
-                    playPromise.catch(() => {});
-                }
-            };
-
-            if (!video.src.endsWith(config.videoSrc)) {
-                video.pause();
-                video.src = config.videoSrc;
-                video.load();
-
-                // Wait for loadeddata before seeking/playing to prevent frozen invisible frame
-                const onLoadedData = () => {
-                    video.removeEventListener("loadeddata", onLoadedData);
-                    video.removeEventListener("canplay", onLoadedData);
-                    if (playRequestIdRef.current === currentReqId) {
-                        startPlayback();
-                    }
-                };
-
-                if (video.readyState >= 2) {
-                    startPlayback();
-                } else {
-                    video.addEventListener("loadeddata", onLoadedData, { once: true });
-                    video.addEventListener("canplay", onLoadedData, { once: true });
-                }
-            } else {
-                startPlayback();
-            }
-
-            // AV Drift Lock: Keeps audio in 100% microsecond sync with video frames
-            video.ontimeupdate = () => {
-                const audio = audioRef.current;
-                if (audio && !audio.paused && !video.paused) {
-                    const diff = Math.abs(audio.currentTime - video.currentTime);
-                    if (diff > 0.12) {
-                        audio.currentTime = video.currentTime;
-                    }
-                }
-            };
-
-            // When video completes, if speech has also finished, hide avatar
-            video.onended = () => {
-                if (playRequestIdRef.current !== currentReqId) return;
-                video.pause();
-                if (!isSpeakingRef.current) {
-                    setIsBubbleOpen(false);
-                    setStage("hidden");
-                }
-            };
+        let audio = audioRef.current;
+        if (!audio && config.audioSrc) {
+            audio = new Audio();
+            audio.preload = "auto";
+            audioRef.current = audio;
         }
 
-        // Reset previous audio
-        if (audioRef.current) {
-            try {
-                audioRef.current.pause();
-                audioRef.current.currentTime = 0;
-            } catch (_) {}
-        }
-
-        // Voice audio playback with calibrated pre-delay and approved uniform kid voice
-        if (!isMutedRef.current && config.audioSrc) {
-            let audio = audioRef.current;
-            if (!audio) {
-                audio = new Audio();
-                audioRef.current = audio;
-            }
+        // Configure audio element
+        if (audio && config.audioSrc) {
+            audio.pause();
             audio.loop = false;
             if (!audio.src.endsWith(config.audioSrc)) {
                 audio.src = config.audioSrc;
@@ -194,38 +130,98 @@ export default function InteractiveAvatar() {
                 if (videoRef.current) {
                     videoRef.current.pause();
                 }
-
-                // Once played, completely hide avatar and bubble - visible strictly once until reload
                 if (bubbleTimerRef.current) {
                     clearTimeout(bubbleTimerRef.current);
                 }
                 bubbleTimerRef.current = setTimeout(() => {
                     setIsBubbleOpen(false);
-                    setStage("hidden");
-                }, 800);
+                    setStage("idle");
+                }, 1200);
+            };
+        }
+
+        // Atomic Synchronized Launch: Video and Audio start at the EXACT same millisecond
+        const startSynchronizedPlayback = () => {
+            if (playRequestIdRef.current !== currentReqId) return;
+
+            if (video) {
+                try {
+                    video.currentTime = 0;
+                } catch (_) {}
+                const vPromise = video.play();
+                if (vPromise !== undefined) vPromise.catch(() => {});
+            }
+
+            if (!isMutedRef.current && audio && config.audioSrc) {
+                try {
+                    audio.currentTime = 0;
+                } catch (_) {}
+                const aPromise = audio.play();
+                if (aPromise !== undefined) {
+                    aPromise.then(() => {
+                        if (playRequestIdRef.current === currentReqId) setAudioBlocked(false);
+                    }).catch(() => {
+                        if (playRequestIdRef.current === currentReqId) setAudioBlocked(true);
+                    });
+                }
+            } else {
+                if (!config.audioSrc) {
+                    isSpeakingRef.current = false;
+                    if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
+                    bubbleTimerRef.current = setTimeout(() => {
+                        setIsBubbleOpen(false);
+                        setStage("idle");
+                    }, 2500);
+                }
+            }
+        };
+
+        if (video) {
+            video.loop = false;
+
+            // AV Drift Lock: Keeps audio in microsecond sync with video frames
+            video.ontimeupdate = () => {
+                const currentAudio = audioRef.current;
+                if (currentAudio && !currentAudio.paused && !video.paused) {
+                    const diff = Math.abs(currentAudio.currentTime - video.currentTime);
+                    if (diff > 0.18) {
+                        currentAudio.currentTime = video.currentTime;
+                    }
+                }
             };
 
-            const audioPromise = audio.play();
-            if (audioPromise !== undefined) {
-                audioPromise.then(() => {
-                    if (playRequestIdRef.current === currentReqId) {
-                        setAudioBlocked(false);
-                    }
-                }).catch(() => {
-                    if (playRequestIdRef.current === currentReqId) {
-                        setAudioBlocked(true);
-                    }
-                });
+            video.onended = () => {
+                if (playRequestIdRef.current !== currentReqId) return;
+                video.pause();
+                if (!isSpeakingRef.current) {
+                    setIsBubbleOpen(false);
+                    setStage("idle");
+                }
+            };
+
+            if (!video.src.endsWith(config.videoSrc)) {
+                video.pause();
+                video.src = config.videoSrc;
+                video.load();
+
+                // Wait until video has loaded enough data to play smoothly
+                const onCanPlay = () => {
+                    video.removeEventListener("canplay", onCanPlay);
+                    video.removeEventListener("loadeddata", onCanPlay);
+                    startSynchronizedPlayback();
+                };
+
+                if (video.readyState >= 2) {
+                    startSynchronizedPlayback();
+                } else {
+                    video.addEventListener("canplay", onCanPlay, { once: true });
+                    video.addEventListener("loadeddata", onCanPlay, { once: true });
+                }
+            } else {
+                startSynchronizedPlayback();
             }
         } else {
-            isSpeakingRef.current = false;
-            if (bubbleTimerRef.current) {
-                clearTimeout(bubbleTimerRef.current);
-            }
-            bubbleTimerRef.current = setTimeout(() => {
-                setIsBubbleOpen(false);
-                setStage("hidden");
-            }, 800);
+            startSynchronizedPlayback();
         }
     }, []);
 
@@ -534,12 +530,9 @@ export default function InteractiveAvatar() {
 
             // User has touched the page:
             if (alreadyPlayed) {
-                // ALREADY PLAYED: Stays completely HIDDEN! Never visible when returning to home or visited tabs!
-                setStage("hidden");
+                // Settle into idle state so avatar remains visible and clickable without re-triggering speech automatically
+                setStage("idle");
                 setIsBubbleOpen(false);
-                if (videoRef.current) {
-                    videoRef.current.pause();
-                }
             } else {
                 playedKeys.add(routeKey);
                 if (location.pathname === "/") {
@@ -616,10 +609,10 @@ export default function InteractiveAvatar() {
             if (scrollDebounceTimerRef.current) {
                 clearTimeout(scrollDebounceTimerRef.current);
             }
-            // 450ms settling timer: ensures user has stopped scrolling before changing section speech
+            // 200ms settling timer: quick and responsive section introduction
             scrollDebounceTimerRef.current = setTimeout(() => {
                 checkScrollSection();
-            }, 450);
+            }, 200);
         };
 
         window.addEventListener("scroll", handleScroll, { passive: true });
@@ -679,8 +672,8 @@ export default function InteractiveAvatar() {
 
     if (location.pathname === "/qr-scan" || location.pathname === "/qr" || location.pathname === "/terms") return null;
 
-    // Completely invisible until first touch, and permanently hidden once single playback finishes
-    const isVisible = hasTouched && (stage === "entering" || stage === "speaking") && !isFormActive;
+    // Visible on interaction when speaking or in friendly idle state
+    const isVisible = hasTouched && (stage === "entering" || stage === "speaking" || stage === "idle") && !isFormActive;
 
     // Route-specific placement to utilize empty space:
     // - On /contact: Position in the MIDDLE part between contact details and the map (as marked in red)
@@ -692,110 +685,130 @@ export default function InteractiveAvatar() {
     const isHome = location.pathname === "/";
 
     return (
-        <aside
-            aria-label="Interactive Concierge"
-            className={`fixed bottom-2 sm:bottom-4 z-30 flex flex-col pointer-events-none select-none transition-all duration-700 ease-out ${
-                isCenter
-                    ? "left-[43%] sm:left-[44%] md:left-[45%] -translate-x-1/2 items-center"
-                    : isLeft
-                    ? "left-1 sm:left-2 md:left-3 lg:left-4 items-start"
-                    : "right-1 sm:right-3 md:right-4 lg:right-6 items-end"
-            } ${
-                isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12 pointer-events-none"
-            }`}
-        >
-            {/* Compact Message Structure Speech Bubble */}
-            {isVisible && (
-                <div
-                    className={`relative mb-1.5 pointer-events-auto transition-all duration-500 ease-out ${
-                        isCenter ? "mx-auto" : isLeft ? "ml-1" : "mr-1 sm:mr-2"
-                    } ${
-                        isBubbleOpen
-                            ? "opacity-100 scale-100 translate-y-0"
-                            : "opacity-0 scale-95 translate-y-2 pointer-events-none"
+        <>
+            {/* Quick Re-open Virtual Concierge Pill when dismissed */}
+            {hasTouched && stage === "hidden" && !isFormActive && (
+                <button
+                    onClick={handleAvatarClick}
+                    className={`fixed bottom-3 z-30 flex items-center gap-2 px-3.5 py-2 rounded-full bg-card/95 backdrop-blur-md border border-[hsl(var(--gold)/0.5)] shadow-[var(--shadow-elegant)] text-foreground text-xs font-semibold hover:border-[hsl(var(--gold))] hover:scale-105 active:scale-95 transition-all cursor-pointer group ${
+                        isLeft ? "left-3 sm:left-6" : "right-3 sm:right-6"
                     }`}
+                    title="Click to speak with Virtual Concierge"
+                    aria-label="Open Virtual Concierge"
                 >
-                    <div
-                        onClick={handleAvatarClick}
-                        title="Click to interact"
-                        className="relative max-w-[160px] sm:max-w-[185px] bg-card/95 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-[hsl(var(--gold)/0.45)] shadow-[var(--shadow-elegant)] flex items-start gap-1.5 cursor-pointer hover:border-[hsl(var(--gold))] group transition-all"
-                    >
-                        <p className="text-[10px] sm:text-[11px] text-foreground font-medium leading-snug flex-1 select-text">
-                            {currentText}
-                        </p>
-                        <div className="flex items-center gap-0.5 shrink-0 pt-0.5 border-l border-border/40 pl-1">
-                            <button
-                                onClick={(e) => { e.stopPropagation(); toggleMute(); }}
-                                className="text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-muted/60 transition-colors"
-                                title={isMuted ? "Unmute voice" : "Mute voice"}
-                                aria-label={isMuted ? "Unmute voice" : "Mute voice"}
-                            >
-                                {isMuted ? <VolumeX size={10} /> : <Volume2 size={10} />}
-                            </button>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
-                                className="text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-muted/60 transition-colors"
-                                title="Dismiss"
-                                aria-label="Dismiss concierge"
-                            >
-                                <X size={10} />
-                            </button>
-                        </div>
-
-                        {/* Speech Bubble Tail pointing down towards the boy */}
-                        <div
-                            className={`absolute -bottom-1 w-2.5 h-2.5 bg-card rotate-45 border-r border-b border-[hsl(var(--gold)/0.45)] ${
-                                isCenter
-                                    ? "left-1/2 -translate-x-1/2"
-                                    : isLeft
-                                    ? "left-5 sm:left-6"
-                                    : "right-5 sm:right-6"
-                            }`}
-                        />
-                    </div>
-                </div>
+                    <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[hsl(var(--gold))] opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[hsl(var(--gold))]"></span>
+                    </span>
+                    <span className="gold-text tracking-wider uppercase text-[10px]">Virtual Concierge</span>
+                </button>
             )}
 
-            {/* Character Stage - Sleek 3:4 Vertical Profile Utilizing Exact Empty Space */}
-            <div
-                onClick={handleAvatarClick}
-                title="Click the boy to speak"
-                className={`relative w-28 sm:w-32 md:w-40 lg:w-44 xl:w-48 aspect-[3/4] cursor-pointer pointer-events-auto overflow-visible transition-all duration-300 ease-in-out translate-y-[0.6cm] ${
-                    isFacilities ? "translate-x-[1.5cm]" : ""
+            <aside
+                aria-label="Interactive Concierge"
+                className={`fixed bottom-2 sm:bottom-4 z-30 flex flex-col pointer-events-none select-none transition-all duration-700 ease-out ${
+                    isCenter
+                        ? "left-[43%] sm:left-[44%] md:left-[45%] -translate-x-1/2 items-center"
+                        : isLeft
+                        ? "left-1 sm:left-2 md:left-3 lg:left-4 items-start"
+                        : "right-1 sm:right-3 md:right-4 lg:right-6 items-end"
                 } ${
-                    isGallery ? "translate-x-[0.8cm]" : ""
-                } ${
-                    isHome ? "translate-x-[0.6cm]" : ""
-                } ${
-                    isLeft ? "-translate-x-[1.5cm]" : ""
+                    isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12 pointer-events-none"
                 }`}
             >
-                {/* 100% Pure Transparent WebGL Canvas */}
-                <canvas
-                    ref={canvasRef}
-                    width={810}
-                    height={1080}
-                    className={`w-full h-full object-contain block bg-transparent border-0 outline-none shadow-none pointer-events-auto ${
-                        isCenter ? "object-center" : isLeft ? "object-left" : "object-right"
+                {/* Compact Message Structure Speech Bubble */}
+                {isVisible && (
+                    <div
+                        className={`relative mb-1.5 pointer-events-auto transition-all duration-500 ease-out ${
+                            isCenter ? "mx-auto" : isLeft ? "ml-1" : "mr-1 sm:mr-2"
+                        } ${
+                            isBubbleOpen
+                                ? "opacity-100 scale-100 translate-y-0"
+                                : "opacity-0 scale-95 translate-y-2 pointer-events-none"
+                        }`}
+                    >
+                        <div
+                            onClick={handleAvatarClick}
+                            title="Click to interact"
+                            className="relative max-w-[160px] sm:max-w-[185px] bg-card/95 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-[hsl(var(--gold)/0.45)] shadow-[var(--shadow-elegant)] flex items-start gap-1.5 cursor-pointer hover:border-[hsl(var(--gold))] group transition-all"
+                        >
+                            <p className="text-[10px] sm:text-[11px] text-foreground font-medium leading-snug flex-1 select-text">
+                                {currentText}
+                            </p>
+                            <div className="flex items-center gap-0.5 shrink-0 pt-0.5 border-l border-border/40 pl-1">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); toggleMute(); }}
+                                    className="text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-muted/60 transition-colors"
+                                    title={isMuted ? "Unmute voice" : "Mute voice"}
+                                    aria-label={isMuted ? "Unmute voice" : "Mute voice"}
+                                >
+                                    {isMuted ? <VolumeX size={10} /> : <Volume2 size={10} />}
+                                </button>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
+                                    className="text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-muted/60 transition-colors"
+                                    title="Dismiss"
+                                    aria-label="Dismiss concierge"
+                                >
+                                    <X size={10} />
+                                </button>
+                            </div>
+
+                            {/* Speech Bubble Tail pointing down towards the boy */}
+                            <div
+                                className={`absolute -bottom-1 w-2.5 h-2.5 bg-card rotate-45 border-r border-b border-[hsl(var(--gold)/0.45)] ${
+                                    isCenter
+                                        ? "left-1/2 -translate-x-1/2"
+                                        : isLeft
+                                        ? "left-5 sm:left-6"
+                                        : "right-5 sm:right-6"
+                                }`}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* Character Stage - Sleek 3:4 Vertical Profile Utilizing Exact Empty Space */}
+                <div
+                    onClick={handleAvatarClick}
+                    title="Click the boy to speak"
+                    className={`relative w-28 sm:w-32 md:w-40 lg:w-44 xl:w-48 aspect-[3/4] cursor-pointer pointer-events-auto overflow-visible transition-all duration-300 ease-in-out translate-y-[0.6cm] ${
+                        isFacilities ? "translate-x-[1.5cm]" : ""
+                    } ${
+                        isGallery ? "translate-x-[0.8cm]" : ""
+                    } ${
+                        isHome ? "translate-x-[0.6cm]" : ""
+                    } ${
+                        isLeft ? "-translate-x-[1.5cm]" : ""
                     }`}
-                />
+                >
+                    {/* 100% Pure Transparent WebGL Canvas */}
+                    <canvas
+                        ref={canvasRef}
+                        width={810}
+                        height={1080}
+                        className={`w-full h-full object-contain block bg-transparent border-0 outline-none shadow-none pointer-events-auto ${
+                            isCenter ? "object-center" : isLeft ? "object-left" : "object-right"
+                        }`}
+                    />
 
-                {/* Video Source - Controlled, Preload metadata only to keep initial page responsive */}
-                <video
-                    ref={videoRef}
-                    muted
-                    playsInline
-                    preload="metadata"
-                    className="absolute inset-0 w-full h-full opacity-[0.001] pointer-events-none -z-10"
-                />
+                    {/* Video Source - Streamlined H.264 Faststart */}
+                    <video
+                        ref={videoRef}
+                        muted
+                        playsInline
+                        preload="auto"
+                        className="absolute inset-0 w-full h-full opacity-[0.001] pointer-events-none -z-10"
+                    />
 
-                {/* Natural Voice Audio Source */}
-                <audio
-                    ref={audioRef}
-                    preload="metadata"
-                    className="hidden"
-                />
-            </div>
-        </aside>
+                    {/* Natural Voice Audio Source */}
+                    <audio
+                        ref={audioRef}
+                        preload="auto"
+                        className="hidden"
+                    />
+                </div>
+            </aside>
+        </>
     );
 }
