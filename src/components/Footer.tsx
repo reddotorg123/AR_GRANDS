@@ -107,7 +107,7 @@ const Footer = () => (
       </div>
       <div className="border-t border-cream/10 mt-16 pt-8 flex flex-col md:flex-row items-center justify-between gap-3">
         <p className="text-body text-cream/50 text-sm">© 2026 A.R Grand. All rights reserved.</p>
-        <p className="text-body text-cream/40 text-xs tracking-[0.25em] uppercase">Crafted with care by Dazzle Enterprises</p>
+        <p className="text-body text-cream/40 text-xs tracking-[0.25em] uppercase">Crafted with care by RedDot</p>
       </div>
     </div>
   </footer>
