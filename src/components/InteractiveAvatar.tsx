@@ -140,49 +140,7 @@ export default function InteractiveAvatar() {
             };
         }
 
-        // Atomic Synchronized Launch: Video and Audio start at the EXACT same millisecond
-        const startSynchronizedPlayback = () => {
-            if (playRequestIdRef.current !== currentReqId) return;
-
-            if (video) {
-                try {
-                    video.currentTime = 0;
-                } catch (_) {}
-                const vPromise = video.play();
-                if (vPromise !== undefined) vPromise.catch(() => {});
-            }
-
-            if (!isMutedRef.current && audio && config.audioSrc) {
-                try {
-                    audio.currentTime = 0;
-                } catch (_) {}
-                const aPromise = audio.play();
-                if (aPromise !== undefined) {
-                    aPromise.then(() => {
-                        if (playRequestIdRef.current === currentReqId) setAudioBlocked(false);
-                    }).catch(() => {
-                        if (playRequestIdRef.current === currentReqId) setAudioBlocked(true);
-                    });
-                }
-            } else {
-                if (!config.audioSrc) {
-                    isSpeakingRef.current = false;
-                    if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
-                    bubbleTimerRef.current = setTimeout(() => {
-                        setIsBubbleOpen(false);
-                        setStage("idle");
-                    }, 2500);
-                }
-            }
-        };
-
-        let hasTriggered = false;
-        const triggerSynchronized = () => {
-            if (hasTriggered || playRequestIdRef.current !== currentReqId) return;
-            hasTriggered = true;
-            startSynchronizedPlayback();
-        };
-
+        // Atomic Synchronized Launch: Video and Audio start IMMEDIATELY and synchronously in the user callstack
         if (video) {
             video.loop = false;
             video.muted = true;
@@ -212,34 +170,38 @@ export default function InteractiveAvatar() {
             };
 
             if (!video.src.endsWith(config.videoSrc)) {
-                video.pause();
                 video.src = config.videoSrc;
-                video.load();
             }
 
-            // Low-bandwidth mobile guard: If video buffering takes > 350ms, start speech immediately
-            // so the mobile user gets an instant responsive voice without waiting on slow cellular buffers
-            const bandwidthFallbackTimer = setTimeout(() => {
-                if (!hasTriggered && playRequestIdRef.current === currentReqId) {
-                    triggerSynchronized();
-                }
-            }, 350);
+            try {
+                video.currentTime = 0;
+            } catch (_) {}
 
-            if (video.readyState >= 2) {
-                clearTimeout(bandwidthFallbackTimer);
-                triggerSynchronized();
-            } else {
-                const onCanPlay = () => {
-                    video.removeEventListener("canplay", onCanPlay);
-                    video.removeEventListener("loadeddata", onCanPlay);
-                    clearTimeout(bandwidthFallbackTimer);
-                    triggerSynchronized();
-                };
-                video.addEventListener("canplay", onCanPlay, { once: true });
-                video.addEventListener("loadeddata", onCanPlay, { once: true });
+            const vPromise = video.play();
+            if (vPromise !== undefined) vPromise.catch(() => {});
+        }
+
+        if (!isMutedRef.current && audio && config.audioSrc) {
+            try {
+                audio.currentTime = 0;
+            } catch (_) {}
+            const aPromise = audio.play();
+            if (aPromise !== undefined) {
+                aPromise.then(() => {
+                    if (playRequestIdRef.current === currentReqId) setAudioBlocked(false);
+                }).catch(() => {
+                    if (playRequestIdRef.current === currentReqId) setAudioBlocked(true);
+                });
             }
         } else {
-            startSynchronizedPlayback();
+            if (!config.audioSrc) {
+                isSpeakingRef.current = false;
+                if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
+                bubbleTimerRef.current = setTimeout(() => {
+                    setIsBubbleOpen(false);
+                    setStage("idle");
+                }, 2500);
+            }
         }
     }, []);
 
@@ -473,53 +435,14 @@ export default function InteractiveAvatar() {
             hasUserInteractedRef.current = true;
             setHasTouched(true);
 
-            // Synchronously unlock mobile iOS / Android audio & video context in user gesture stack
-            try {
-                let audio = audioRef.current;
-                if (!audio) {
-                    audio = new Audio();
-                    audio.preload = "auto";
-                    audioRef.current = audio;
-                }
-                if (!audio.src || audio.src === "") {
-                    audio.src = activeConfigRef.current.audioSrc || "/audio/home.mp3";
-                }
-                audio.muted = true;
-                const p = audio.play();
-                if (p !== undefined) {
-                    p.then(() => {
-                        audio?.pause();
-                        if (audio) {
-                            audio.muted = false;
-                            audio.currentTime = 0;
-                        }
-                    }).catch(() => {
-                        if (audio) audio.muted = false;
-                    });
-                }
-            } catch (_) {}
-
-            if (videoRef.current) {
-                try {
-                    videoRef.current.muted = true;
-                    videoRef.current.defaultMuted = true;
-                    const vp = videoRef.current.play();
-                    if (vp !== undefined) {
-                        vp.then(() => {
-                            videoRef.current?.pause();
-                        }).catch(() => {});
-                    }
-                } catch (_) {}
-            }
-
             window.removeEventListener("pointerdown", onFirstInteraction);
             window.removeEventListener("touchstart", onFirstInteraction);
             window.removeEventListener("scroll", onFirstInteraction);
             window.removeEventListener("keydown", onFirstInteraction);
 
-            // If current route hasn't played yet and dwell timer completed, start now
+            // Directly play route speech and animation on first user interaction
             const routeKey = "route:" + location.pathname;
-            if (!playedKeys.has(routeKey) && dwellSatisfiedRef.current) {
+            if (!playedKeys.has(routeKey)) {
                 playedKeys.add(routeKey);
                 if (location.pathname === "/") {
                     playedKeys.add("home:hero");
@@ -727,7 +650,10 @@ export default function InteractiveAvatar() {
         }
     };
 
-    const handleAvatarClick = () => {
+    const handleAvatarClick = (e?: React.MouseEvent) => {
+        if (e) {
+            e.stopPropagation();
+        }
         hasUserInteractedRef.current = true;
         setHasTouched(true);
         if (audioRef.current) {
