@@ -11,6 +11,18 @@ interface AvatarConfig {
 // Waiting dwell time reduced to 60 milliseconds for instant responsiveness
 const DWELL_TIME_MS = 60;
 
+const isExcludedRoute = (pathname: string) => {
+    return (
+        pathname === "/enquiry" ||
+        pathname.startsWith("/enquiry") ||
+        pathname === "/admin" ||
+        pathname.startsWith("/admin") ||
+        pathname === "/qr-scan" ||
+        pathname === "/qr" ||
+        pathname === "/terms"
+    );
+};
+
 // High-Quality Lip-Synced Assets with EXACT Synchronized Dialogue Syllables
 const routeAvatarConfigs: Record<string, AvatarConfig> = {
     "/": { videoSrc: "/avatar-welcome.mp4", audioSrc: "/audio/home.mp3", text: "Welcome to A.R. Grand! Explore our luxury halls." },
@@ -18,7 +30,6 @@ const routeAvatarConfigs: Record<string, AvatarConfig> = {
     "/facilities": { videoSrc: "/avatar-features.mp4", audioSrc: "/audio/facilities.mp3", text: "Air-conditioned halls, premium dining, and private bridal suites await you." },
     "/events": { videoSrc: "/avatar-events.mp4", audioSrc: "/audio/events.mp3", text: "Check available dates for weddings, receptions, and parties." },
     "/contact": { videoSrc: "/avatar-cta.mp4", audioSrc: "/audio/contact.mp3", text: "Ready to celebrate? Book your dream date today." },
-    "/enquiry": { videoSrc: "/avatar-tour.mp4", audioSrc: "/audio/enquiry.mp3", text: "Step inside and take a 360 virtual tour." },
     "/admin": { videoSrc: "/avatar-admin.mp4", audioSrc: "/audio/admin.mp3", text: "Welcome manager, please sign in to access bookings." },
     "/locations/perambur": { videoSrc: "/avatar-location.mp4", audioSrc: "/audio/perambur.mp3", text: "Easily accessible venues across North Chennai with ample parking." },
     "/locations/vyasarpadi": { videoSrc: "/avatar-location.mp4", audioSrc: "/audio/vyasarpadi.mp3", text: "Easily accessible venues across North Chennai with ample parking." },
@@ -431,6 +442,7 @@ export default function InteractiveAvatar() {
     // Start animation & speech only after user touches or interacts with the page
     useEffect(() => {
         const onFirstInteraction = () => {
+            if (isExcludedRoute(location.pathname)) return;
             if (hasUserInteractedRef.current) return;
             hasUserInteractedRef.current = true;
             setHasTouched(true);
@@ -483,9 +495,13 @@ export default function InteractiveAvatar() {
             videoRef.current.pause();
         }
 
-        if (location.pathname === "/qr-scan" || location.pathname === "/qr" || location.pathname === "/terms") {
+        if (isExcludedRoute(location.pathname)) {
             setStage("hidden");
             setIsBubbleOpen(false);
+            stopSpeech();
+            if (videoRef.current) {
+                videoRef.current.pause();
+            }
             return;
         }
 
@@ -672,7 +688,7 @@ export default function InteractiveAvatar() {
         playConfig(activeConfigRef.current);
     };
 
-    if (location.pathname.startsWith("/admin") || location.pathname === "/qr-scan" || location.pathname === "/qr" || location.pathname === "/terms") return null;
+    if (isExcludedRoute(location.pathname)) return null;
 
     // Visible on interaction when speaking or in friendly idle state
     const isVisible = hasTouched && (stage === "entering" || stage === "speaking" || stage === "idle") && !isFormActive;
