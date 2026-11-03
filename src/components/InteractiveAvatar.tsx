@@ -384,15 +384,14 @@ export default function InteractiveAvatar() {
                         if (isNewFrame) {
                             lastFrameTime = curTime;
                             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+                            const uVideoLoc = gl.getUniformLocation(program, "u_video");
+                            gl.uniform1i(uVideoLoc, 0);
+
+                            gl.viewport(0, 0, canvas.width, canvas.height);
+                            gl.clearColor(0, 0, 0, 0);
+                            gl.clear(gl.COLOR_BUFFER_BIT);
+                            gl.drawArrays(gl.TRIANGLES, 0, 6);
                         }
-
-                        const uVideoLoc = gl.getUniformLocation(program, "u_video");
-                        gl.uniform1i(uVideoLoc, 0);
-
-                        gl.viewport(0, 0, canvas.width, canvas.height);
-                        gl.clearColor(0, 0, 0, 0);
-                        gl.clear(gl.COLOR_BUFFER_BIT);
-                        gl.drawArrays(gl.TRIANGLES, 0, 6);
                     } catch (_) {}
                 }
             }

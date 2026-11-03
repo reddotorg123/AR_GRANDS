@@ -55,7 +55,7 @@ const HeroSlider = () => {
                   height={1080}
                   loading={i === 0 ? "eager" : "lazy"}
                   decoding="async"
-                  {...(i === 0 ? { fetchPriority: "high" as any } : {})}
+                  {...(i === 0 ? { fetchpriority: "high" as any } : {})}
                 />
               </div>
               {/* Cinematic overlays */}
