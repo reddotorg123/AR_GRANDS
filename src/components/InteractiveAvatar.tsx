@@ -36,15 +36,7 @@ const routeAvatarConfigs: Record<string, AvatarConfig> = {
     "/locations/madhavaram": { videoSrc: "/avatar-location.mp4", audioSrc: "/audio/madhavaram.mp3", text: "Easily accessible venues across North Chennai with ample parking." }
 };
 
-const homeSections: Record<string, AvatarConfig> = {
-    hero: { text: "Welcome to A.R. Grand! Explore our luxury halls.", videoSrc: "/avatar-welcome.mp4", audioSrc: "/audio/home.mp3" },
-    about: { text: "Timeless elegance in Kodungaiyur, crafted for your special day.", videoSrc: "/avatar-about.mp4", audioSrc: "/audio/home-about.mp3" },
-    stats: { text: "Over 500 celebrations with seating for 250 guests.", videoSrc: "/avatar-stats.mp4", audioSrc: "/audio/home-stats.mp3" },
-    features: { text: "Air-conditioned halls, premium dining, and private bridal suites await you.", videoSrc: "/avatar-features.mp4", audioSrc: "/audio/home-features.mp3" },
-    tour: { text: "Step inside and take a 360 virtual tour.", videoSrc: "/avatar-tour.mp4", audioSrc: "/audio/home-tour.mp3" },
-    testimonials: { text: "Loved by hundreds of happy families across Chennai.", videoSrc: "/avatar-testimonials.mp4", audioSrc: "/audio/home-testimonials.mp3" },
-    cta: { text: "Ready to celebrate? Book your dream date today.", videoSrc: "/avatar-cta.mp4", audioSrc: "/audio/home-cta.mp3" }
-};
+
 
 // Tracks all sections & routes that have already played during this browser session.
 // Cleared automatically on page reload so animations run strictly ONCE until the next reload.
@@ -66,15 +58,12 @@ export default function InteractiveAvatar() {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const isMutedRef = useRef(false);
     const activeConfigRef = useRef<AvatarConfig>(routeAvatarConfigs["/"]);
-    const activeHomeSectionRef = useRef<string | null>(null);
 
     // Concurrency Token: Ensures rapid switching NEVER triggers stale video/audio events
     const playRequestIdRef = useRef(0);
 
     // Audio & Scroll Queue Controls: Speech finishes before next clip; no rapid scroll conflicts
     const isSpeakingRef = useRef(false);
-    const pendingSectionRef = useRef<AvatarConfig | null>(null);
-    const scrollDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Dwell condition controls: 60ms quick non-blocking emergence
@@ -366,7 +355,7 @@ export default function InteractiveAvatar() {
                 const curTime = video.currentTime;
                 const isNewFrame = curTime !== lastFrameTime;
 
-                if (!video.paused || isNewFrame) {
+                if (!video.paused && isNewFrame) {
                     try {
                         gl.useProgram(program);
                         gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
@@ -448,16 +437,32 @@ export default function InteractiveAvatar() {
 
             window.removeEventListener("pointerdown", onFirstInteraction);
             window.removeEventListener("touchstart", onFirstInteraction);
-            window.removeEventListener("scroll", onFirstInteraction);
             window.removeEventListener("keydown", onFirstInteraction);
 
-            // Directly play route speech and animation on first user interaction
+            // CRITICAL FOR IOS SAFARI (iPhone 7 / older mobile browsers):
+            // Audio elements MUST be initialized and unlocked synchronously within the user touch/pointer callstack.
+            if (!audioRef.current && activeConfigRef.current?.audioSrc) {
+                const a = new Audio(activeConfigRef.current.audioSrc);
+                a.preload = "auto";
+                audioRef.current = a;
+            }
+            if (audioRef.current) {
+                audioRef.current.muted = false;
+                // Prime and unlock audio synchronously during user touch
+                const primePromise = audioRef.current.play();
+                if (primePromise !== undefined) {
+                    primePromise.catch(() => {});
+                }
+            }
+            if (videoRef.current) {
+                videoRef.current.muted = true;
+                videoRef.current.play().catch(() => {});
+            }
+
+            // On Home page and other pages, strictly play first route animation
             const routeKey = "route:" + location.pathname;
             if (!playedKeys.has(routeKey)) {
                 playedKeys.add(routeKey);
-                if (location.pathname === "/") {
-                    playedKeys.add("home:hero");
-                }
                 setStage("speaking");
                 setIsBubbleOpen(true);
                 playConfig(activeConfigRef.current);
@@ -468,13 +473,11 @@ export default function InteractiveAvatar() {
 
         window.addEventListener("pointerdown", onFirstInteraction, { passive: true });
         window.addEventListener("touchstart", onFirstInteraction, { passive: true });
-        window.addEventListener("scroll", onFirstInteraction, { passive: true });
         window.addEventListener("keydown", onFirstInteraction, { passive: true });
 
         return () => {
             window.removeEventListener("pointerdown", onFirstInteraction);
             window.removeEventListener("touchstart", onFirstInteraction);
-            window.removeEventListener("scroll", onFirstInteraction);
             window.removeEventListener("keydown", onFirstInteraction);
         };
     }, [location.pathname, playConfig]);
@@ -542,9 +545,7 @@ export default function InteractiveAvatar() {
                 setIsBubbleOpen(false);
             } else {
                 playedKeys.add(routeKey);
-                if (location.pathname === "/") {
-                    playedKeys.add("home:hero");
-                }
+                
                 setStage("speaking");
                 setIsBubbleOpen(true);
                 playConfig(activeConfigRef.current);
@@ -559,79 +560,7 @@ export default function InteractiveAvatar() {
         };
     }, [location.pathname, stopSpeech, playConfig]);
 
-    // Section Scroll Observer with Settling Debounce:
-    // Rapid scrolling does NOT trigger repeated playback.
-    // Runs strictly ONCE per section until the next reload.
-    useEffect(() => {
-        if (location.pathname !== "/") return;
 
-        const checkScrollSection = () => {
-            if (!dwellSatisfiedRef.current) return;
-
-            const sections = document.querySelectorAll<HTMLElement>("[data-section]");
-            if (!sections.length) return;
-
-            const targetY = window.innerHeight * 0.45;
-            let matchedSection: string | null = null;
-            let closestDist = Infinity;
-
-            sections.forEach((sec) => {
-                const rect = sec.getBoundingClientRect();
-                const key = sec.dataset.section;
-                if (!key) return;
-
-                if (rect.top <= targetY && rect.bottom >= targetY) {
-                    matchedSection = key;
-                } else if (rect.bottom > 0 && rect.top < window.innerHeight) {
-                    const dist = Math.abs(rect.top - targetY);
-                    if (dist < closestDist) {
-                        closestDist = dist;
-                        matchedSection = key;
-                    }
-                }
-            });
-
-            if (matchedSection) {
-                const sectionKey = "home:" + matchedSection;
-                // Run strictly ONCE per session until reload
-                if (playedKeys.has(sectionKey)) {
-                    return;
-                }
-
-                const config = homeSections[matchedSection];
-                if (config) {
-                    hasUserInteractedRef.current = true;
-                    setHasTouched(true);
-                    playedKeys.add(sectionKey);
-                    activeHomeSectionRef.current = matchedSection;
-                    stopSpeech();
-                    setStage("speaking");
-                    setIsBubbleOpen(true);
-                    playConfig(config);
-                }
-            }
-        };
-
-        const handleScroll = () => {
-            if (scrollDebounceTimerRef.current) {
-                clearTimeout(scrollDebounceTimerRef.current);
-            }
-            // 200ms settling timer: quick and responsive section introduction
-            scrollDebounceTimerRef.current = setTimeout(() => {
-                checkScrollSection();
-            }, 200);
-        };
-
-        window.addEventListener("scroll", handleScroll, { passive: true });
-
-        return () => {
-            if (scrollDebounceTimerRef.current) {
-                clearTimeout(scrollDebounceTimerRef.current);
-            }
-            window.removeEventListener("scroll", handleScroll);
-            activeHomeSectionRef.current = null;
-        };
-    }, [location.pathname, playConfig, stopSpeech]);
 
     const handleDismiss = () => {
         stopSpeech();

@@ -286,7 +286,7 @@ export default function Preloader() {
     let animFrameId: number;
     let videoVisibleStartTime: number | null = null;
     let hasRenderedFirstFrame = false;
-    const minNaturalDuration = 850; // Brisk and luxurious ~0.85s intro while brand animation plays
+    const minNaturalDuration = 1800; // Standardized luxury pacing (~1.8s) for smooth visual brand entrance
 
     const renderLoop = (time: number) => {
       // Check if video is ready to render
@@ -374,6 +374,9 @@ export default function Preloader() {
         autoPlay
         muted
         playsInline
+        // @ts-ignore
+        webkit-playsinline="true"
+        x5-playsinline="true"
         preload="auto"
         disablePictureInPicture
         disableRemotePlayback
