@@ -109,19 +109,18 @@ export default function InteractiveAvatar() {
         const video = videoRef.current;
         let audio = audioRef.current;
         if (!audio && config.audioSrc) {
-            audio = new Audio();
+            audio = new Audio(config.audioSrc);
             audio.preload = "auto";
             audioRef.current = audio;
         }
 
         // Configure audio element
         if (audio && config.audioSrc) {
-            audio.pause();
             audio.loop = false;
+            audio.muted = isMutedRef.current;
             if (!audio.src.endsWith(config.audioSrc)) {
                 audio.src = config.audioSrc;
             }
-            audio.currentTime = 0;
 
             audio.onended = () => {
                 if (playRequestIdRef.current !== currentReqId) return;
@@ -181,9 +180,7 @@ export default function InteractiveAvatar() {
         }
 
         if (!isMutedRef.current && audio && config.audioSrc) {
-            try {
-                audio.currentTime = 0;
-            } catch (_) {}
+            audio.muted = false;
             const aPromise = audio.play();
             if (aPromise !== undefined) {
                 aPromise.then(() => {
@@ -434,25 +431,29 @@ export default function InteractiveAvatar() {
             hasUserInteractedRef.current = true;
             setHasTouched(true);
 
-            window.removeEventListener("pointerdown", onFirstInteraction);
-            window.removeEventListener("touchstart", onFirstInteraction);
-            window.removeEventListener("keydown", onFirstInteraction);
+            window.removeEventListener("pointerdown", onFirstInteraction, true);
+            window.removeEventListener("touchstart", onFirstInteraction, true);
+            window.removeEventListener("click", onFirstInteraction, true);
+            window.removeEventListener("keydown", onFirstInteraction, true);
 
             // CRITICAL FOR IOS SAFARI (iPhone 7 / older mobile browsers):
             // Audio elements MUST be initialized and unlocked synchronously within the user touch/pointer callstack.
-            if (!audioRef.current && activeConfigRef.current?.audioSrc) {
-                const a = new Audio(activeConfigRef.current.audioSrc);
-                a.preload = "auto";
-                audioRef.current = a;
-            }
-            if (audioRef.current) {
-                audioRef.current.muted = false;
-                // Prime and unlock audio synchronously during user touch
-                const primePromise = audioRef.current.play();
-                if (primePromise !== undefined) {
-                    primePromise.catch(() => {});
+            const config = activeConfigRef.current;
+            if (config?.audioSrc) {
+                let audio = audioRef.current;
+                if (!audio) {
+                    audio = new Audio(config.audioSrc);
+                    audio.preload = "auto";
+                    audioRef.current = audio;
+                }
+                audio.muted = false;
+                // Synchronous direct play to guarantee iOS Safari audio unlocking
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(() => {});
                 }
             }
+
             if (videoRef.current) {
                 videoRef.current.muted = true;
                 videoRef.current.play().catch(() => {});
@@ -464,20 +465,22 @@ export default function InteractiveAvatar() {
                 playedKeys.add(routeKey);
                 setStage("speaking");
                 setIsBubbleOpen(true);
-                playConfig(activeConfigRef.current);
+                playConfig(config);
             } else {
                 setStage("idle");
             }
         };
 
-        window.addEventListener("pointerdown", onFirstInteraction, { passive: true });
-        window.addEventListener("touchstart", onFirstInteraction, { passive: true });
-        window.addEventListener("keydown", onFirstInteraction, { passive: true });
+        window.addEventListener("pointerdown", onFirstInteraction, true);
+        window.addEventListener("touchstart", onFirstInteraction, true);
+        window.addEventListener("click", onFirstInteraction, true);
+        window.addEventListener("keydown", onFirstInteraction, true);
 
         return () => {
-            window.removeEventListener("pointerdown", onFirstInteraction);
-            window.removeEventListener("touchstart", onFirstInteraction);
-            window.removeEventListener("keydown", onFirstInteraction);
+            window.removeEventListener("pointerdown", onFirstInteraction, true);
+            window.removeEventListener("touchstart", onFirstInteraction, true);
+            window.removeEventListener("click", onFirstInteraction, true);
+            window.removeEventListener("keydown", onFirstInteraction, true);
         };
     }, [location.pathname, playConfig]);
 
