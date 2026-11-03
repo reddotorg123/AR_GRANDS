@@ -74,7 +74,6 @@ export default function InteractiveAvatar() {
     const stopSpeech = useCallback(() => {
         playRequestIdRef.current += 1;
         isSpeakingRef.current = false;
-        pendingSectionRef.current = null;
         if (bubbleTimerRef.current) {
             clearTimeout(bubbleTimerRef.current);
             bubbleTimerRef.current = null;
