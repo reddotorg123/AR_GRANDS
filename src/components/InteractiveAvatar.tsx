@@ -446,7 +446,7 @@ export default function InteractiveAvatar() {
 
     // Start animation & speech only after user touches or interacts with the page
     useEffect(() => {
-        const onFirstInteraction = () => {
+        const onFirstInteraction = (e: Event) => {
             if (isExcludedRoute(location.pathname)) return;
             if (hasUserInteractedRef.current) return;
             hasUserInteractedRef.current = true;
@@ -458,15 +458,27 @@ export default function InteractiveAvatar() {
                 dwellTimerRef.current = null;
             }
 
-            window.removeEventListener("pointerdown", onFirstInteraction, true);
-            window.removeEventListener("touchstart", onFirstInteraction, true);
-            window.removeEventListener("click", onFirstInteraction, true);
-            window.removeEventListener("keydown", onFirstInteraction, true);
+            ["pointerdown", "pointerup", "touchstart", "touchend", "click", "keydown"].forEach((evt) => {
+                window.removeEventListener(evt, onFirstInteraction, true);
+                document.removeEventListener(evt, onFirstInteraction, true);
+            });
+
+            // Unlock audio element synchronously within this user activation gesture
+            const config = activeConfigRef.current;
+            if (config?.audioSrc && audioRef.current) {
+                const audio = audioRef.current;
+                audio.muted = isMutedRef.current;
+                if (!audio.src.endsWith(config.audioSrc)) {
+                    audio.src = config.audioSrc;
+                }
+                const p = audio.play();
+                if (p !== undefined) {
+                    p.catch(() => {});
+                }
+            }
 
             // On Home page and other pages, strictly play first route animation
             const routeKey = "route:" + location.pathname;
-            const config = activeConfigRef.current;
-
             if (!playedKeys.has(routeKey) && config) {
                 playedKeys.add(routeKey);
                 setStage("speaking");
@@ -477,16 +489,17 @@ export default function InteractiveAvatar() {
             }
         };
 
-        window.addEventListener("pointerdown", onFirstInteraction, true);
-        window.addEventListener("touchstart", onFirstInteraction, true);
-        window.addEventListener("click", onFirstInteraction, true);
-        window.addEventListener("keydown", onFirstInteraction, true);
+        const events = ["pointerdown", "pointerup", "touchstart", "touchend", "click", "keydown"];
+        events.forEach((evt) => {
+            window.addEventListener(evt, onFirstInteraction, { capture: true, passive: true });
+            document.addEventListener(evt, onFirstInteraction, { capture: true, passive: true });
+        });
 
         return () => {
-            window.removeEventListener("pointerdown", onFirstInteraction, true);
-            window.removeEventListener("touchstart", onFirstInteraction, true);
-            window.removeEventListener("click", onFirstInteraction, true);
-            window.removeEventListener("keydown", onFirstInteraction, true);
+            events.forEach((evt) => {
+                window.removeEventListener(evt, onFirstInteraction, true);
+                document.removeEventListener(evt, onFirstInteraction, true);
+            });
         };
     }, [location.pathname, playConfig]);
 
@@ -763,7 +776,10 @@ export default function InteractiveAvatar() {
                         ref={audioRef}
                         src="/audio/home.mp3"
                         preload="auto"
-                        className="hidden"
+                        playsInline
+                        // @ts-ignore
+                        webkit-playsinline="true"
+                        style={{ position: "absolute", width: 0, height: 0, opacity: 0, pointerEvents: "none" }}
                     />
                 </div>
             </aside>
