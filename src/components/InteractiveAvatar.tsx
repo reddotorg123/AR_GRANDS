@@ -444,49 +444,33 @@ export default function InteractiveAvatar() {
         };
     }, [stage]);
 
+    const handleFirstTouch = useCallback(() => {
+        if (isExcludedRoute(location.pathname)) return;
+        if (hasUserInteractedRef.current) return;
+        hasUserInteractedRef.current = true;
+        setHasTouched(true);
+
+        if (dwellTimerRef.current) {
+            clearTimeout(dwellTimerRef.current);
+            dwellTimerRef.current = null;
+        }
+
+        const config = activeConfigRef.current;
+        const routeKey = "route:" + location.pathname;
+        if (!playedKeys.has(routeKey) && config) {
+            playedKeys.add(routeKey);
+            setStage("speaking");
+            setIsBubbleOpen(true);
+            playConfig(config);
+        } else {
+            setStage("idle");
+        }
+    }, [location.pathname, playConfig]);
+
     // Start animation & speech only after user touches or interacts with the page
     useEffect(() => {
         const onFirstInteraction = (e: Event) => {
-            if (isExcludedRoute(location.pathname)) return;
-            if (hasUserInteractedRef.current) return;
-            hasUserInteractedRef.current = true;
-            setHasTouched(true);
-
-            // Clean up dwell timer so it won't fire concurrently
-            if (dwellTimerRef.current) {
-                clearTimeout(dwellTimerRef.current);
-                dwellTimerRef.current = null;
-            }
-
-            ["pointerdown", "pointerup", "touchstart", "touchend", "click", "keydown"].forEach((evt) => {
-                window.removeEventListener(evt, onFirstInteraction, true);
-                document.removeEventListener(evt, onFirstInteraction, true);
-            });
-
-            // Unlock audio element synchronously within this user activation gesture
-            const config = activeConfigRef.current;
-            if (config?.audioSrc && audioRef.current) {
-                const audio = audioRef.current;
-                audio.muted = isMutedRef.current;
-                if (!audio.src.endsWith(config.audioSrc)) {
-                    audio.src = config.audioSrc;
-                }
-                const p = audio.play();
-                if (p !== undefined) {
-                    p.catch(() => {});
-                }
-            }
-
-            // On Home page and other pages, strictly play first route animation
-            const routeKey = "route:" + location.pathname;
-            if (!playedKeys.has(routeKey) && config) {
-                playedKeys.add(routeKey);
-                setStage("speaking");
-                setIsBubbleOpen(true);
-                playConfig(config);
-            } else {
-                setStage("idle");
-            }
+            handleFirstTouch();
         };
 
         const events = ["pointerdown", "pointerup", "touchstart", "touchend", "click", "keydown"];
@@ -501,7 +485,7 @@ export default function InteractiveAvatar() {
                 document.removeEventListener(evt, onFirstInteraction, true);
             });
         };
-    }, [location.pathname, playConfig]);
+    }, [handleFirstTouch]);
 
     // Route Switching & Dwell Timing:
     // Keeps avatar completely INVISIBLE until user touch is triggered,
@@ -655,6 +639,16 @@ export default function InteractiveAvatar() {
 
     return (
         <>
+            {/* Transparent First Touch Backdrop: Directly captures user tap anywhere on screen */}
+            {!hasTouched && (
+                <div
+                    aria-hidden="true"
+                    onClick={handleFirstTouch}
+                    onTouchEnd={handleFirstTouch}
+                    className="fixed inset-0 z-20 bg-transparent cursor-pointer pointer-events-auto"
+                />
+            )}
+
             {/* Quick Re-open Virtual Concierge Pill when dismissed */}
             {hasTouched && stage === "hidden" && !isFormActive && (
                 <button

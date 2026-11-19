@@ -17,6 +17,7 @@ export default function QRScan() {
     const handleStart = () => {
         setIsOverlayVisible(false);
         if (videoRef.current) {
+            videoRef.current.muted = false;
             videoRef.current.play().catch((err) => {
                 console.error("Playback error:", err);
             });
