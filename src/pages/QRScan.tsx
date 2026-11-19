@@ -106,8 +106,11 @@ export default function QRScan() {
             <video
                 ref={videoRef}
                 id="main-video"
-                src="/qr-animation.mp4"
+                src="/animation.mp4"
                 playsInline
+                // @ts-ignore
+                webkit-playsinline="true"
+                x5-playsinline="true"
                 preload="auto"
                 style={{
                     width: "100%",

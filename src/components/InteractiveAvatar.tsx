@@ -456,6 +456,14 @@ export default function InteractiveAvatar() {
         }
 
         const config = activeConfigRef.current;
+
+        // Immediate direct synchronous audio play within user activation callstack
+        if (config?.audioSrc && audioRef.current && !isMutedRef.current) {
+            const audio = audioRef.current;
+            audio.muted = false;
+            audio.play().catch(() => {});
+        }
+
         const routeKey = "route:" + location.pathname;
         if (!playedKeys.has(routeKey) && config) {
             playedKeys.add(routeKey);
