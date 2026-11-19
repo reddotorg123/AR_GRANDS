@@ -847,12 +847,13 @@ export default function InteractiveAvatar() {
                         ref={canvasRef}
                         width={480}
                         height={640}
+                        style={{ display: stage === "speaking" ? "block" : "none" }}
                         className={`w-full h-full object-contain block bg-transparent border-0 outline-none shadow-none pointer-events-auto will-change-transform ${
                             isCenter ? "object-center" : isLeft ? "object-left" : "object-right"
-                        } ${stage === "speaking" ? "opacity-100" : "opacity-0"}`}
+                        }`}
                     />
 
-                    {/* Video Source - Streamlined H.264 Faststart with Full iOS/Android Inline Attributes */}
+                    {/* Video Source - Hidden 1x1 offscreen element strictly used as WebGL texture source */}
                     <video
                         ref={videoRef}
                         src="/avatar-welcome.mp4"
@@ -865,7 +866,16 @@ export default function InteractiveAvatar() {
                         disableRemotePlayback
                         preload="auto"
                         crossOrigin="anonymous"
-                        className="absolute inset-0 w-full h-full opacity-[0.001] pointer-events-none -z-10"
+                        style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            width: "1px",
+                            height: "1px",
+                            opacity: 0,
+                            pointerEvents: "none",
+                            zIndex: -9999
+                        }}
                     />
 
                     {/* Natural Voice Audio Source Preloaded for Zero Delay */}
