@@ -134,8 +134,9 @@ export default function InteractiveAvatar() {
                 }
                 bubbleTimerRef.current = setTimeout(() => {
                     setIsBubbleOpen(false);
-                    setStage("idle");
-                }, 1200);
+                    // Vanish the avatar completely once the animation and audio finish
+                    setStage("hidden");
+                }, 400);
             };
         }
 
@@ -165,7 +166,8 @@ export default function InteractiveAvatar() {
                 video.pause();
                 if (!isSpeakingRef.current) {
                     setIsBubbleOpen(false);
-                    setStage("idle");
+                    // Vanish once video ends
+                    setStage("hidden");
                 }
             };
 
@@ -664,14 +666,14 @@ export default function InteractiveAvatar() {
                     className={`fixed bottom-3 z-30 flex items-center gap-2 px-3.5 py-2 rounded-full bg-card/95 backdrop-blur-md border border-[hsl(var(--gold)/0.5)] shadow-[var(--shadow-elegant)] text-foreground text-xs font-semibold hover:border-[hsl(var(--gold))] hover:scale-105 active:scale-95 transition-all cursor-pointer group ${
                         isLeft ? "left-3 sm:left-6" : "right-3 sm:right-6"
                     }`}
-                    title="Click to speak with Virtual Concierge"
-                    aria-label="Open Virtual Concierge"
+                    title="Click to replay avatar"
+                    aria-label="Replay avatar"
                 >
                     <span className="relative flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[hsl(var(--gold))] opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-[hsl(var(--gold))]"></span>
                     </span>
-                    <span className="gold-text tracking-wider uppercase text-[10px]">Virtual Concierge</span>
+                    <span className="gold-text tracking-wider uppercase text-[10px]">Replay Concierge</span>
                 </button>
             )}
 
