@@ -58,6 +58,7 @@ export default function InteractiveAvatar() {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const isMutedRef = useRef(false);
     const activeConfigRef = useRef<AvatarConfig>(routeAvatarConfigs["/"]);
+    const renderActiveFrameRef = useRef<(() => void) | null>(null);
 
     // Concurrency Token: Ensures rapid switching NEVER triggers stale video/audio events
     const playRequestIdRef = useRef(0);
@@ -167,7 +168,8 @@ export default function InteractiveAvatar() {
                 }
             };
 
-            if (!video.src.endsWith(config.videoSrc)) {
+            const isSameSrc = video.src.endsWith(config.videoSrc);
+            if (!isSameSrc) {
                 video.src = config.videoSrc;
             }
 
@@ -175,8 +177,24 @@ export default function InteractiveAvatar() {
                 video.currentTime = 0;
             } catch (_) {}
 
-            const vPromise = video.play();
-            if (vPromise !== undefined) vPromise.catch(() => {});
+            // When source changes or video can play, ensure first frame renders cleanly without flicker
+            const startPlayback = () => {
+                try {
+                    video.currentTime = 0;
+                } catch (_) {}
+                if (renderActiveFrameRef.current) {
+                    renderActiveFrameRef.current();
+                }
+                const vPromise = video.play();
+                if (vPromise !== undefined) vPromise.catch(() => {});
+            };
+
+            if (video.readyState >= 2) {
+                startPlayback();
+            } else {
+                video.addEventListener("loadeddata", startPlayback, { once: true });
+                video.load();
+            }
         }
 
         if (!isMutedRef.current && audio && config.audioSrc) {
@@ -251,29 +269,26 @@ export default function InteractiveAvatar() {
             void main() {
                 vec4 col = texture2D(u_video, v_uv);
 
-                // Pure green screen chroma keying & despill
+                // High-precision green screen chroma keying & despill
                 float maxRB = max(col.r, col.b);
                 float greenExcess = col.g - maxRB;
 
-                float isGreenMain = smoothstep(0.08, 0.18, greenExcess) * smoothstep(0.28, 0.44, col.g);
-                float isGreenShadow = smoothstep(0.05, 0.14, greenExcess) * smoothstep(0.14, 0.30, col.g) * (1.0 - smoothstep(0.44, 0.58, col.g)) * 0.95;
+                // Calibrated against video lighting curve:
+                // Smooth transition zones prevent edge stepping, flickering, and harsh halo
+                float isGreenMain = smoothstep(0.04, 0.12, greenExcess) * smoothstep(0.20, 0.38, col.g);
+                float isGreenShadow = smoothstep(0.02, 0.08, greenExcess) * smoothstep(0.10, 0.22, col.g) * (1.0 - smoothstep(0.38, 0.52, col.g)) * 0.95;
                 float isGreen = clamp(isGreenMain + isGreenShadow, 0.0, 1.0);
 
-                // Corner watermark suppression
-                if (v_uv.x > 0.84 && v_uv.y > 0.74) {
-                    if (isGreen > 0.05 || greenExcess > 0.06) {
-                        isGreen = 1.0;
-                    }
-                }
-
-                // Preserve white shirt, collar and light clothes
+                // Preserve true foreground alpha
                 float alpha = clamp(1.0 - isGreen, 0.0, 1.0);
 
+                // Complete despill: Neutralize green tint on hair, clothing edges, and shoulders
                 vec3 finalRgb = col.rgb;
                 if (greenExcess > 0.0) {
-                    finalRgb.g = min(col.g, maxRB * 1.02);
+                    finalRgb.g = min(col.g, maxRB * 1.0);
                 }
 
+                // Premultiplied alpha output for clean zero-halo compositing in WebGL
                 gl_FragColor = vec4(finalRgb * alpha, alpha);
             }
         `;
@@ -305,10 +320,10 @@ export default function InteractiveAvatar() {
 
             quadBuffer = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
-            // 3:4 portrait crop centered on character (u: 0.28 to 0.70)
-            // Removes 170px transparent side gutters so character fits perfectly in the empty margin space
-            const uMin = 0.28;
-            const uMax = 0.70;
+            // Dynamic calibrated 3:4 portrait crop centered on character (u: 0.30 to 0.68)
+            // Completely encapsulates full body gestures across all routes without clipping or side gutters
+            const uMin = 0.30;
+            const uMax = 0.68;
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
                 -1, -1, uMin, 1,
                  1, -1, uMax, 1,
@@ -345,39 +360,41 @@ export default function InteractiveAvatar() {
         canvas.addEventListener("webglcontextrestored", handleContextRestored, false);
 
         let lastFrameTime = -1;
+        const renderFrame = () => {
+            if (isCancelled || !gl || !program || !quadBuffer || !tex || !video || video.readyState < 2) return;
+            try {
+                gl.useProgram(program);
+                gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+                const posLoc = gl.getAttribLocation(program, "a_pos");
+                const uvLoc = gl.getAttribLocation(program, "a_uv");
+                gl.enableVertexAttribArray(posLoc);
+                gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
+                gl.enableVertexAttribArray(uvLoc);
+                gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 16, 8);
+
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, tex);
+
+                lastFrameTime = video.currentTime;
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+                const uVideoLoc = gl.getUniformLocation(program, "u_video");
+                gl.uniform1i(uVideoLoc, 0);
+
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                gl.clearColor(0, 0, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+            } catch (_) {}
+        };
+
+        renderActiveFrameRef.current = renderFrame;
+
         const render = () => {
             if (isCancelled) return;
-            if (gl && program && quadBuffer && tex && video.readyState >= 2) {
+            if (video && video.readyState >= 2 && !video.paused) {
                 const curTime = video.currentTime;
-                const isNewFrame = curTime !== lastFrameTime;
-
-                if (!video.paused && isNewFrame) {
-                    try {
-                        gl.useProgram(program);
-                        gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
-                        const posLoc = gl.getAttribLocation(program, "a_pos");
-                        const uvLoc = gl.getAttribLocation(program, "a_uv");
-                        gl.enableVertexAttribArray(posLoc);
-                        gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
-                        gl.enableVertexAttribArray(uvLoc);
-                        gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 16, 8);
-
-                        gl.activeTexture(gl.TEXTURE0);
-                        gl.bindTexture(gl.TEXTURE_2D, tex);
-
-                        // Only re-upload video pixel texture to GPU memory when timestamp changes
-                        if (isNewFrame) {
-                            lastFrameTime = curTime;
-                            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
-                            const uVideoLoc = gl.getUniformLocation(program, "u_video");
-                            gl.uniform1i(uVideoLoc, 0);
-
-                            gl.viewport(0, 0, canvas.width, canvas.height);
-                            gl.clearColor(0, 0, 0, 0);
-                            gl.clear(gl.COLOR_BUFFER_BIT);
-                            gl.drawArrays(gl.TRIANGLES, 0, 6);
-                        }
-                    } catch (_) {}
+                if (curTime !== lastFrameTime) {
+                    renderFrame();
                 }
             }
             animationFrameId = requestAnimationFrame(render);
@@ -387,6 +404,7 @@ export default function InteractiveAvatar() {
 
         return () => {
             isCancelled = true;
+            renderActiveFrameRef.current = null;
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
             canvas.removeEventListener("webglcontextlost", handleContextLost);
             canvas.removeEventListener("webglcontextrestored", handleContextRestored);
@@ -523,6 +541,8 @@ export default function InteractiveAvatar() {
             if (!video.src.endsWith(config.videoSrc)) {
                 video.src = config.videoSrc;
                 video.load();
+            } else if (alreadyPlayed && video.readyState >= 2 && renderActiveFrameRef.current) {
+                renderActiveFrameRef.current();
             }
         }
 
@@ -720,16 +740,18 @@ export default function InteractiveAvatar() {
                 <div
                     onClick={handleAvatarClick}
                     title="Click the boy to speak"
-                    className="relative w-24 sm:w-28 md:w-36 lg:w-40 xl:w-44 aspect-[3/4] cursor-pointer pointer-events-auto overflow-visible transition-all duration-300 ease-in-out translate-y-0 sm:translate-y-1"
+                    className={`relative w-24 sm:w-28 md:w-36 lg:w-40 xl:w-44 aspect-[3/4] cursor-pointer pointer-events-auto overflow-visible transition-all duration-300 ease-in-out translate-y-0 sm:translate-y-1 ${
+                        stage === "idle" ? "hover:scale-[1.03] active:scale-[0.98]" : ""
+                    }`}
                 >
                     {/* 100% Pure Transparent WebGL Canvas (Optimized 480x640 Retina Resolution) */}
                     <canvas
                         ref={canvasRef}
                         width={480}
                         height={640}
-                        className={`w-full h-full object-contain block bg-transparent border-0 outline-none shadow-none pointer-events-auto ${
+                        className={`w-full h-full object-contain block bg-transparent border-0 outline-none shadow-none pointer-events-auto will-change-transform ${
                             isCenter ? "object-center" : isLeft ? "object-left" : "object-right"
-                        }`}
+                        } ${stage === "idle" ? "filter drop-shadow(0 4px 12px rgba(163,124,42,0.18))" : ""}`}
                     />
 
                     {/* Video Source - Streamlined H.264 Faststart with Full iOS/Android Inline Attributes */}
