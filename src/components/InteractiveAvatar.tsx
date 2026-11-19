@@ -297,15 +297,14 @@ export default function InteractiveAvatar() {
             void main() {
                 vec4 col = texture2D(u_video, v_uv);
 
-                // High-precision green screen chroma keying & despill
+                // High-precision calibrated green mat chroma keying & despill
                 float maxRB = max(col.r, col.b);
                 float greenExcess = col.g - maxRB;
 
-                // Calibrated against video lighting curve:
-                // Smooth transition zones prevent edge stepping, flickering, and harsh halo
-                float isGreenMain = smoothstep(0.04, 0.12, greenExcess) * smoothstep(0.20, 0.38, col.g);
-                float isGreenShadow = smoothstep(0.02, 0.08, greenExcess) * smoothstep(0.10, 0.22, col.g) * (1.0 - smoothstep(0.38, 0.52, col.g)) * 0.95;
-                float isGreen = clamp(isGreenMain + isGreenShadow, 0.0, 1.0);
+                // Calibrated against the video's olive green mat background:
+                // Background has greenExcess ~0.18-0.20 and col.g ~0.48-0.51, col.r ~0.28-0.31
+                float isGreen = smoothstep(0.035, 0.09, greenExcess) * smoothstep(0.20, 0.32, col.g) * (1.0 - smoothstep(0.55, 0.70, col.r));
+                isGreen = clamp(isGreen, 0.0, 1.0);
 
                 // Preserve true foreground alpha
                 float alpha = clamp(1.0 - isGreen, 0.0, 1.0);
@@ -483,10 +482,10 @@ export default function InteractiveAvatar() {
         const config = activeConfigRef.current;
         const routeKey = "route:" + location.pathname;
 
-        // If on home page and not yet played, show the avatar politely and ask: "Do you want me to take a tour?"
+        // If on home page and not yet played, show the avatar politely and ask: "Want my help?"
         if (location.pathname === "/" && !playedKeys.has(routeKey)) {
             setStage("idle");
-            setCurrentText("Do you want me to take a tour?");
+            setCurrentText("Want my help?");
             setIsBubbleOpen(true);
             setTourPromptActive(true);
             return;
@@ -590,9 +589,9 @@ export default function InteractiveAvatar() {
                 setIsBubbleOpen(false);
                 clearCanvas();
             } else if (location.pathname === "/") {
-                // On home screen, show avatar politely and ask: "Do you want me to take a tour?"
+                // On home screen, show avatar politely and ask: "Want my help?"
                 setStage("idle");
-                setCurrentText("Do you want me to take a tour?");
+                setCurrentText("Want my help?");
                 setIsBubbleOpen(true);
                 setTourPromptActive(true);
             } else {
@@ -722,8 +721,8 @@ export default function InteractiveAvatar() {
                 />
             )}
 
-            {/* Quick Re-open Virtual Concierge Pill when dismissed */}
-            {hasTouched && stage === "hidden" && !isFormActive && (
+            {/* Quick Re-open Virtual Concierge Pill when dismissed (Only on other sub-pages, not home) */}
+            {hasTouched && stage === "hidden" && !isFormActive && !isHome && (
                 <button
                     onClick={handleAvatarClick}
                     className={`fixed bottom-3 z-30 flex items-center gap-2 px-3.5 py-2 rounded-full bg-card/95 backdrop-blur-md border border-[hsl(var(--gold)/0.5)] shadow-[var(--shadow-elegant)] text-foreground text-xs font-semibold hover:border-[hsl(var(--gold))] hover:scale-105 active:scale-95 transition-all cursor-pointer group ${
@@ -826,19 +825,19 @@ export default function InteractiveAvatar() {
                     </div>
                 )}
 
-                {/* Character Stage - Elegant Circular Glass & Gold Framed Avatar */}
+                {/* Character Stage - Sleek 3:4 Vertical Profile Fully Visible Within Viewport */}
                 <div
                     onClick={tourPromptActive ? handleStartTour : handleAvatarClick}
                     title={tourPromptActive ? "Click Yes to start tour" : "Click the boy to speak"}
-                    className={`relative w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-full border-2 border-[hsl(var(--gold))] shadow-[0_8px_32px_rgba(197,160,89,0.35)] bg-gradient-to-b from-card/90 via-card/80 to-[hsl(var(--gold)/0.15)] backdrop-blur-md cursor-pointer pointer-events-auto overflow-hidden transition-all duration-300 ease-in-out hover:scale-105 active:scale-95 group ${
-                        stage === "idle" ? "ring-2 ring-[hsl(var(--gold)/0.5)] ring-offset-2 ring-offset-background" : ""
+                    className={`relative w-24 sm:w-28 md:w-36 lg:w-40 xl:w-44 aspect-[3/4] cursor-pointer pointer-events-auto overflow-visible transition-all duration-300 ease-in-out translate-y-0 sm:translate-y-1 ${
+                        stage === "idle" ? "hover:scale-[1.03] active:scale-[0.98]" : ""
                     }`}
                 >
-                    {/* Idle state static transparent visual for pristine instant appearance without green studio artifact */}
+                    {/* Idle state static transparent visual for pristine instant appearance without video lag */}
                     <img
                         src="/avatar-idle.png"
                         alt="A.R. Grands Concierge"
-                        className={`absolute inset-0 w-full h-full object-cover object-top pointer-events-none transition-opacity duration-300 ${
+                        className={`absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-300 ${
                             stage === "idle" ? "opacity-100" : "opacity-0"
                         }`}
                     />
@@ -848,13 +847,10 @@ export default function InteractiveAvatar() {
                         ref={canvasRef}
                         width={480}
                         height={640}
-                        className={`w-full h-full object-cover object-top block bg-transparent border-0 outline-none shadow-none pointer-events-auto will-change-transform ${
-                            stage === "speaking" ? "opacity-100" : "opacity-0"
-                        }`}
+                        className={`w-full h-full object-contain block bg-transparent border-0 outline-none shadow-none pointer-events-auto will-change-transform ${
+                            isCenter ? "object-center" : isLeft ? "object-left" : "object-right"
+                        } ${stage === "speaking" ? "opacity-100" : "opacity-0"}`}
                     />
-
-                    {/* Subtle golden ambient highlight ring */}
-                    <div className="absolute inset-0 rounded-full border border-white/20 pointer-events-none shadow-inner" />
 
                     {/* Video Source - Streamlined H.264 Faststart with Full iOS/Android Inline Attributes */}
                     <video
