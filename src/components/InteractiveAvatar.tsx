@@ -148,10 +148,11 @@ export default function InteractiveAvatar() {
             // AV Master Sync: Audio is the master clock. If video drifts, gently adjust video to match audio speech.
             video.ontimeupdate = () => {
                 const currentAudio = audioRef.current;
-                if (currentAudio && !currentAudio.paused && !video.paused) {
+                // Only sync if audio has actually started and is making progress (> 100ms)
+                if (currentAudio && !currentAudio.paused && !video.paused && currentAudio.currentTime > 0.1) {
                     const diff = video.currentTime - currentAudio.currentTime;
-                    // Resync video to audio if out of sync by > 300ms, preserving uninterrupted crystal-clear audio
-                    if (Math.abs(diff) > 0.3) {
+                    // Resync video to audio if out of sync by > 350ms, preserving uninterrupted crystal-clear audio
+                    if (Math.abs(diff) > 0.35) {
                         try {
                             video.currentTime = currentAudio.currentTime;
                         } catch (_) {}
@@ -173,15 +174,15 @@ export default function InteractiveAvatar() {
                 video.src = config.videoSrc;
             }
 
-            try {
-                video.currentTime = 0;
-            } catch (_) {}
-
-            // When source changes or video can play, ensure first frame renders cleanly without flicker
-            const startPlayback = () => {
+            // Only reset time if needed to prevent glitching/restarting
+            if (video.currentTime > 0.05) {
                 try {
                     video.currentTime = 0;
                 } catch (_) {}
+            }
+
+            // When source changes or video can play, ensure first frame renders cleanly without flicker
+            const startPlayback = () => {
                 if (renderActiveFrameRef.current) {
                     renderActiveFrameRef.current();
                 }
@@ -193,7 +194,9 @@ export default function InteractiveAvatar() {
                 startPlayback();
             } else {
                 video.addEventListener("loadeddata", startPlayback, { once: true });
-                video.load();
+                if (!isSameSrc) {
+                    video.load();
+                }
             }
         }
 
@@ -449,37 +452,22 @@ export default function InteractiveAvatar() {
             hasUserInteractedRef.current = true;
             setHasTouched(true);
 
+            // Clean up dwell timer so it won't fire concurrently
+            if (dwellTimerRef.current) {
+                clearTimeout(dwellTimerRef.current);
+                dwellTimerRef.current = null;
+            }
+
             window.removeEventListener("pointerdown", onFirstInteraction, true);
             window.removeEventListener("touchstart", onFirstInteraction, true);
             window.removeEventListener("click", onFirstInteraction, true);
             window.removeEventListener("keydown", onFirstInteraction, true);
 
-            // CRITICAL FOR IOS SAFARI (iPhone 7 / older mobile browsers):
-            // Audio elements MUST be initialized and unlocked synchronously within the user touch/pointer callstack.
-            const config = activeConfigRef.current;
-            if (config?.audioSrc) {
-                let audio = audioRef.current;
-                if (!audio) {
-                    audio = new Audio(config.audioSrc);
-                    audio.preload = "auto";
-                    audioRef.current = audio;
-                }
-                audio.muted = false;
-                // Synchronous direct play to guarantee iOS Safari audio unlocking
-                const playPromise = audio.play();
-                if (playPromise !== undefined) {
-                    playPromise.catch(() => {});
-                }
-            }
-
-            if (videoRef.current) {
-                videoRef.current.muted = true;
-                videoRef.current.play().catch(() => {});
-            }
-
             // On Home page and other pages, strictly play first route animation
             const routeKey = "route:" + location.pathname;
-            if (!playedKeys.has(routeKey)) {
+            const config = activeConfigRef.current;
+
+            if (!playedKeys.has(routeKey) && config) {
                 playedKeys.add(routeKey);
                 setStage("speaking");
                 setIsBubbleOpen(true);
