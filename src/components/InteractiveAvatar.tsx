@@ -51,6 +51,7 @@ export default function InteractiveAvatar() {
     const [isBubbleOpen, setIsBubbleOpen] = useState(false);
     const [hasTouched, setHasTouched] = useState(false);
     const [isFormActive, setIsFormActive] = useState(false);
+    const [tourPromptActive, setTourPromptActive] = useState(false);
 
     const location = useLocation();
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -480,19 +481,18 @@ export default function InteractiveAvatar() {
         }
 
         const config = activeConfigRef.current;
-
-        // Immediate direct synchronous media play within user activation callstack
-        if (audioRef.current && !isMutedRef.current) {
-            const audio = audioRef.current;
-            audio.muted = false;
-            audio.play().catch(() => {});
-        }
-        if (videoRef.current) {
-            const video = videoRef.current;
-            video.play().catch(() => {});
-        }
-
         const routeKey = "route:" + location.pathname;
+
+        // If on home page and not yet played, show the avatar politely and ask: "Do you want me to take a tour?"
+        if (location.pathname === "/" && !playedKeys.has(routeKey)) {
+            setStage("idle");
+            setCurrentText("Do you want me to take a tour?");
+            setIsBubbleOpen(true);
+            setTourPromptActive(true);
+            return;
+        }
+
+        // On other routes:
         if (!playedKeys.has(routeKey) && config) {
             playedKeys.add(routeKey);
             setStage("speaking");
@@ -589,6 +589,12 @@ export default function InteractiveAvatar() {
                 setStage("hidden");
                 setIsBubbleOpen(false);
                 clearCanvas();
+            } else if (location.pathname === "/") {
+                // On home screen, show avatar politely and ask: "Do you want me to take a tour?"
+                setStage("idle");
+                setCurrentText("Do you want me to take a tour?");
+                setIsBubbleOpen(true);
+                setTourPromptActive(true);
             } else {
                 playedKeys.add(routeKey);
                 
@@ -620,7 +626,38 @@ export default function InteractiveAvatar() {
         }
         dwellSatisfiedRef.current = false;
         setIsBubbleOpen(false);
+        setTourPromptActive(false);
         setStage("hidden");
+    };
+
+    const handleStartTour = (e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setTourPromptActive(false);
+        const routeKey = "route:" + location.pathname;
+        playedKeys.add(routeKey);
+
+        // Immediate direct synchronous user activation unlock for audio & video on click/tap
+        if (audioRef.current && !isMutedRef.current) {
+            const audio = audioRef.current;
+            audio.muted = false;
+            audio.play().catch(() => {});
+        }
+        if (videoRef.current) {
+            const video = videoRef.current;
+            video.play().catch(() => {});
+        }
+
+        setStage("speaking");
+        setIsBubbleOpen(true);
+        playConfig(activeConfigRef.current);
+    };
+
+    const handleDeclineTour = (e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setTourPromptActive(false);
+        const routeKey = "route:" + location.pathname;
+        playedKeys.add(routeKey);
+        handleDismiss();
     };
 
     const toggleMute = () => {
@@ -727,31 +764,53 @@ export default function InteractiveAvatar() {
                         }`}
                     >
                         <div
-                            onClick={handleAvatarClick}
-                            title="Click to interact"
-                            className="relative max-w-[150px] sm:max-w-[185px] bg-card/95 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-[hsl(var(--gold)/0.45)] shadow-[var(--shadow-elegant)] flex items-start gap-1.5 cursor-pointer hover:border-[hsl(var(--gold))] group transition-all"
+                            onClick={tourPromptActive ? undefined : handleAvatarClick}
+                            title={tourPromptActive ? undefined : "Click to interact"}
+                            className="relative max-w-[160px] sm:max-w-[200px] bg-card/95 backdrop-blur-md px-3 py-2 rounded-xl border border-[hsl(var(--gold)/0.45)] shadow-[var(--shadow-elegant)] flex flex-col gap-2 transition-all"
                         >
-                            <p className="text-[10px] sm:text-[11px] text-foreground font-medium leading-snug flex-1 select-text">
-                                {currentText}
-                            </p>
-                            <div className="flex items-center gap-0.5 shrink-0 pt-0.5 border-l border-border/40 pl-1">
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); toggleMute(); }}
-                                    className="text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-muted/60 transition-colors"
-                                    title={isMuted ? "Unmute voice" : "Mute voice"}
-                                    aria-label={isMuted ? "Unmute voice" : "Mute voice"}
-                                >
-                                    {isMuted ? <VolumeX size={10} /> : <Volume2 size={10} />}
-                                </button>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
-                                    className="text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-muted/60 transition-colors"
-                                    title="Dismiss"
-                                    aria-label="Dismiss concierge"
-                                >
-                                    <X size={10} />
-                                </button>
+                            <div className="flex items-start gap-1.5">
+                                <p className="text-[11px] sm:text-xs text-foreground font-medium leading-snug flex-1 select-text">
+                                    {currentText}
+                                </p>
+                                <div className="flex items-center gap-0.5 shrink-0 pt-0.5 border-l border-border/40 pl-1">
+                                    {!tourPromptActive && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); toggleMute(); }}
+                                            className="text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-muted/60 transition-colors"
+                                            title={isMuted ? "Unmute voice" : "Mute voice"}
+                                            aria-label={isMuted ? "Unmute voice" : "Mute voice"}
+                                        >
+                                            {isMuted ? <VolumeX size={10} /> : <Volume2 size={10} />}
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
+                                        className="text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-muted/60 transition-colors"
+                                        title="Dismiss"
+                                        aria-label="Dismiss concierge"
+                                    >
+                                        <X size={10} />
+                                    </button>
+                                </div>
                             </div>
+
+                            {/* Yes / No Tour Prompt Interactive Buttons */}
+                            {tourPromptActive && (
+                                <div className="flex items-center gap-2 pt-1 border-t border-border/30">
+                                    <button
+                                        onClick={handleStartTour}
+                                        className="flex-1 py-1 px-2.5 rounded-lg bg-[hsl(var(--gold))] text-black font-semibold text-[11px] hover:brightness-110 active:scale-95 transition-all text-center shadow-sm cursor-pointer"
+                                    >
+                                        Yes
+                                    </button>
+                                    <button
+                                        onClick={handleDeclineTour}
+                                        className="flex-1 py-1 px-2.5 rounded-lg bg-muted text-muted-foreground font-medium text-[11px] hover:text-foreground hover:bg-muted/80 active:scale-95 transition-all text-center cursor-pointer border border-border/40"
+                                    >
+                                        No
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Speech Bubble Tail pointing down towards the boy */}
                             <div
@@ -769,20 +828,29 @@ export default function InteractiveAvatar() {
 
                 {/* Character Stage - Sleek 3:4 Vertical Profile Fully Visible Within Viewport */}
                 <div
-                    onClick={handleAvatarClick}
-                    title="Click the boy to speak"
+                    onClick={tourPromptActive ? handleStartTour : handleAvatarClick}
+                    title={tourPromptActive ? "Click Yes to start tour" : "Click the boy to speak"}
                     className={`relative w-24 sm:w-28 md:w-36 lg:w-40 xl:w-44 aspect-[3/4] cursor-pointer pointer-events-auto overflow-visible transition-all duration-300 ease-in-out translate-y-0 sm:translate-y-1 ${
                         stage === "idle" ? "hover:scale-[1.03] active:scale-[0.98]" : ""
                     }`}
                 >
-                    {/* 100% Pure Transparent WebGL Canvas (Optimized 480x640 Retina Resolution) */}
+                    {/* Idle state static transparent visual for pristine instant appearance without video lag */}
+                    <img
+                        src="/avatar-idle.png"
+                        alt="A.R. Grands Concierge"
+                        className={`absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-300 ${
+                            stage === "idle" ? "opacity-100" : "opacity-0"
+                        }`}
+                    />
+
+                    {/* 100% Pure Transparent WebGL Canvas (Active during speaking video playback) */}
                     <canvas
                         ref={canvasRef}
                         width={480}
                         height={640}
                         className={`w-full h-full object-contain block bg-transparent border-0 outline-none shadow-none pointer-events-auto will-change-transform ${
                             isCenter ? "object-center" : isLeft ? "object-left" : "object-right"
-                        } ${stage === "idle" ? "filter drop-shadow(0 4px 12px rgba(163,124,42,0.18))" : ""}`}
+                        } ${stage === "speaking" ? "opacity-100" : "opacity-0"}`}
                     />
 
                     {/* Video Source - Streamlined H.264 Faststart with Full iOS/Android Inline Attributes */}
