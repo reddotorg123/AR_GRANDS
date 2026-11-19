@@ -72,6 +72,20 @@ export default function InteractiveAvatar() {
     const dwellSatisfiedRef = useRef(false);
     const hasUserInteractedRef = useRef(false);
 
+    // Clear WebGL canvas to fully transparent black
+    const clearCanvas = useCallback(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        try {
+            const gl = (canvas.getContext("webgl") || canvas.getContext("experimental-webgl")) as WebGLRenderingContext | null;
+            if (gl) {
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                gl.clearColor(0, 0, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+            }
+        } catch (_) {}
+    }, []);
+
     const stopSpeech = useCallback(() => {
         playRequestIdRef.current += 1;
         isSpeakingRef.current = false;
@@ -85,12 +99,19 @@ export default function InteractiveAvatar() {
                 audioRef.current.currentTime = 0;
             } catch (_) {}
         }
+        if (videoRef.current) {
+            try {
+                videoRef.current.pause();
+                videoRef.current.currentTime = 0;
+            } catch (_) {}
+        }
+        clearCanvas();
         if (typeof window !== "undefined" && window.speechSynthesis) {
             try {
                 window.speechSynthesis.cancel();
             } catch (_) {}
         }
-    }, []);
+    }, [clearCanvas]);
 
     // Controlled video and calibrated voice playback with atomic synchronization
     const playConfig = useCallback((config: AvatarConfig) => {
@@ -128,15 +149,14 @@ export default function InteractiveAvatar() {
                 isSpeakingRef.current = false;
                 if (videoRef.current) {
                     videoRef.current.pause();
+                    videoRef.current.currentTime = 0;
                 }
+                clearCanvas();
                 if (bubbleTimerRef.current) {
                     clearTimeout(bubbleTimerRef.current);
                 }
-                bubbleTimerRef.current = setTimeout(() => {
-                    setIsBubbleOpen(false);
-                    // Vanish the avatar completely once the animation and audio finish
-                    setStage("hidden");
-                }, 400);
+                setIsBubbleOpen(false);
+                setStage("hidden");
             };
         }
 
@@ -164,6 +184,8 @@ export default function InteractiveAvatar() {
             video.onended = () => {
                 if (playRequestIdRef.current !== currentReqId) return;
                 video.pause();
+                video.currentTime = 0;
+                clearCanvas();
                 if (!isSpeakingRef.current) {
                     setIsBubbleOpen(false);
                     // Vanish once video ends
@@ -218,11 +240,11 @@ export default function InteractiveAvatar() {
                 if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
                 bubbleTimerRef.current = setTimeout(() => {
                     setIsBubbleOpen(false);
-                    setStage("idle");
+                    setStage("hidden");
                 }, 2500);
             }
         }
-    }, []);
+    }, [clearCanvas]);
 
     // Form input avoidance: When an input, textarea, or form is active, fade out avatar to avoid blocking
     useEffect(() => {
@@ -459,11 +481,15 @@ export default function InteractiveAvatar() {
 
         const config = activeConfigRef.current;
 
-        // Immediate direct synchronous audio play within user activation callstack
-        if (config?.audioSrc && audioRef.current && !isMutedRef.current) {
+        // Immediate direct synchronous media play within user activation callstack
+        if (audioRef.current && !isMutedRef.current) {
             const audio = audioRef.current;
             audio.muted = false;
             audio.play().catch(() => {});
+        }
+        if (videoRef.current) {
+            const video = videoRef.current;
+            video.play().catch(() => {});
         }
 
         const routeKey = "route:" + location.pathname;
@@ -473,7 +499,7 @@ export default function InteractiveAvatar() {
             setIsBubbleOpen(true);
             playConfig(config);
         } else {
-            setStage("idle");
+            setStage("hidden");
         }
     }, [location.pathname, playConfig]);
 
@@ -533,13 +559,13 @@ export default function InteractiveAvatar() {
         const video = videoRef.current;
         if (video) {
             video.pause();
+            video.currentTime = 0;
             if (!video.src.endsWith(config.videoSrc)) {
                 video.src = config.videoSrc;
                 video.load();
-            } else if (alreadyPlayed && video.readyState >= 2 && renderActiveFrameRef.current) {
-                renderActiveFrameRef.current();
             }
         }
+        clearCanvas();
 
         // 200 millisecond waiting time for clean non-intrusive emergence
         dwellTimerRef.current = setTimeout(() => {
@@ -551,15 +577,18 @@ export default function InteractiveAvatar() {
                 setIsBubbleOpen(false);
                 if (videoRef.current) {
                     videoRef.current.pause();
+                    videoRef.current.currentTime = 0;
                 }
+                clearCanvas();
                 return;
             }
 
             // User has touched the page:
             if (alreadyPlayed) {
-                // Settle into idle state so avatar remains visible and clickable without re-triggering speech automatically
-                setStage("idle");
+                // If already played, stay hidden and do not show avatar or end frames
+                setStage("hidden");
                 setIsBubbleOpen(false);
+                clearCanvas();
             } else {
                 playedKeys.add(routeKey);
                 
@@ -575,15 +604,12 @@ export default function InteractiveAvatar() {
                 dwellTimerRef.current = null;
             }
         };
-    }, [location.pathname, stopSpeech, playConfig]);
+    }, [location.pathname, stopSpeech, playConfig, clearCanvas]);
 
 
 
     const handleDismiss = () => {
         stopSpeech();
-        if (videoRef.current) {
-            videoRef.current.pause();
-        }
         if (dwellTimerRef.current) {
             clearTimeout(dwellTimerRef.current);
             dwellTimerRef.current = null;
