@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { Check, X } from "lucide-react";
@@ -31,11 +31,29 @@ const AdminLogin = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [failCount, setFailCount] = useState(0);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (cooldownSeconds > 0) {
+      const timer = setTimeout(() => setCooldownSeconds((c) => c - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldownSeconds]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (cooldownSeconds > 0) {
+      toast({
+        title: "Temporarily Locked",
+        description: `Too many failed attempts. Please wait ${cooldownSeconds} seconds.`,
+        variant: "destructive",
+      });
+      return;
+    }
 
     const result = loginSchema.safeParse({ email, password });
     if (!result.success) {
@@ -55,7 +73,23 @@ const AdminLogin = () => {
     });
 
     if (error) {
-      toast({ title: "Login failed", description: error.message, variant: "destructive" });
+      const nextFail = failCount + 1;
+      setFailCount(nextFail);
+      if (nextFail >= 5) {
+        setCooldownSeconds(60);
+        setFailCount(0);
+        toast({
+          title: "Account locked",
+          description: "Too many failed attempts. Cooldown activated for 60 seconds.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Login failed",
+          description: `Invalid credentials. (${5 - nextFail} attempts remaining)`,
+          variant: "destructive",
+        });
+      }
       setLoading(false);
       return;
     }
@@ -80,6 +114,7 @@ const AdminLogin = () => {
       return;
     }
 
+    setFailCount(0);
     toast({ title: "Welcome, Admin!" });
     navigate("/events");
     setLoading(false);
@@ -135,10 +170,14 @@ const AdminLogin = () => {
           </div>
           <button
             type="submit"
-            disabled={loading}
-            className="w-full bg-primary text-primary-foreground py-3 rounded-lg font-body font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
+            disabled={loading || cooldownSeconds > 0}
+            className="w-full bg-primary text-primary-foreground py-3 rounded-lg font-body font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 cursor-pointer"
           >
-            {loading ? "Signing in..." : "Sign In"}
+            {loading
+              ? "Signing in..."
+              : cooldownSeconds > 0
+              ? `Wait ${cooldownSeconds}s (Cooldown)`
+              : "Sign In"}
           </button>
         </form>
       </section>

@@ -480,7 +480,7 @@ export default function InteractiveAvatar() {
         const onFirstInteraction = () => {
             if (isExcludedRoute(location.pathname)) return;
 
-            // If on home page and not yet played, let the polite "Want my help?" prompt stay active
+            // If on home page and not yet played, let the initial concierge greeting stay active
             if (location.pathname === "/" && !playedKeys.has("route:/")) {
                 return;
             }
@@ -767,7 +767,7 @@ export default function InteractiveAvatar() {
                                 </div>
                             </div>
 
-                            {/* Yes / No Tour Prompt Interactive Buttons */}
+                            {/* Concierge Action Confirmation Buttons */}
                             {tourPromptActive && (
                                 <div className="flex items-center gap-2 pt-1 border-t border-border/30">
                                     <button
