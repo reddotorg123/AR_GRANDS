@@ -108,7 +108,7 @@ export default function QRScan() {
                 id="main-video"
                 src="/animation.mp4"
                 playsInline
-                // @ts-ignore
+                // @ts-expect-error Non-standard mobile attribute
                 webkit-playsinline="true"
                 x5-playsinline="true"
                 preload="auto"

@@ -329,7 +329,9 @@ export default function Preloader() {
         if (videoRef.current && !videoRef.current.paused) {
           try {
             videoRef.current.pause();
-          } catch {}
+          } catch {
+            /* ignore pause error */
+          }
         }
 
         setTimeout(() => {
@@ -374,7 +376,7 @@ export default function Preloader() {
         autoPlay
         muted
         playsInline
-        // @ts-ignore
+        // @ts-expect-error Non-standard mobile attribute
         webkit-playsinline="true"
         x5-playsinline="true"
         preload="auto"

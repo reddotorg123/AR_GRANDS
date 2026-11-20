@@ -81,7 +81,9 @@ export default function InteractiveAvatar() {
                 gl.clearColor(0, 0, 0, 0);
                 gl.clear(gl.COLOR_BUFFER_BIT);
             }
-        } catch (_) {}
+        } catch {
+            /* ignore WebGL error */
+        }
     }, []);
 
     const stopSpeech = useCallback(() => {
@@ -95,12 +97,16 @@ export default function InteractiveAvatar() {
             try {
                 audioRef.current.pause();
                 audioRef.current.currentTime = 0;
-            } catch (_) {}
+            } catch {
+                /* ignore audio pause error */
+            }
         }
         if (typeof window !== "undefined" && window.speechSynthesis) {
             try {
                 window.speechSynthesis.cancel();
-            } catch (_) {}
+            } catch {
+                /* ignore speech cancel error */
+            }
         }
     }, []);
 
@@ -167,7 +173,9 @@ export default function InteractiveAvatar() {
                     if (Math.abs(diff) > 0.3) {
                         try {
                             video.currentTime = currentAudio.currentTime;
-                        } catch (_) {}
+                        } catch {
+                            /* ignore sync seek error */
+                        }
                     }
                 }
             };
@@ -188,7 +196,9 @@ export default function InteractiveAvatar() {
 
             try {
                 video.currentTime = 0;
-            } catch (_) {}
+            } catch {
+                /* ignore rewind error */
+            }
 
             const vPromise = video.play();
             if (vPromise !== undefined) vPromise.catch(() => {});
@@ -392,7 +402,9 @@ export default function InteractiveAvatar() {
                             gl.clear(gl.COLOR_BUFFER_BIT);
                             gl.drawArrays(gl.TRIANGLES, 0, 6);
                         }
-                    } catch (_) {}
+                    } catch {
+                        /* ignore frame render error */
+                    }
                 }
             }
             animationFrameId = requestAnimationFrame(render);
@@ -668,8 +680,7 @@ export default function InteractiveAvatar() {
         playConfig(activeConfigRef.current);
     };
 
-    if (isExcludedRoute(location.pathname)) return null;
-
+    const isExcluded = isExcludedRoute(location.pathname);
     const isVisible = (stage === "entering" || stage === "speaking" || stage === "idle") && !isFormActive;
 
     const isHome = location.pathname === "/";
@@ -682,9 +693,13 @@ export default function InteractiveAvatar() {
 
     // Notify WhatsApp floating button to coordinate position without overlapping
     useEffect(() => {
-        const side = isAvatarOnRight ? "right" : "left";
-        window.dispatchEvent(new CustomEvent("avatar-position", { detail: side }));
-    }, [isAvatarOnRight]);
+        if (!isExcluded) {
+            const side = isAvatarOnRight ? "right" : "left";
+            window.dispatchEvent(new CustomEvent("avatar-position", { detail: side }));
+        }
+    }, [isAvatarOnRight, isExcluded]);
+
+    if (isExcluded) return null;
 
     // Hardware-accelerated 60fps GPU transforms for low-spec mobile smooth sliding
     const translateY = isVisible ? "0px" : "48px";
@@ -841,7 +856,7 @@ export default function InteractiveAvatar() {
                     src="/avatar-welcome.mp4"
                     muted
                     playsInline
-                    // @ts-ignore
+                    // @ts-expect-error Non-standard mobile attribute
                     webkit-playsinline="true"
                     x5-playsinline="true"
                     disablePictureInPicture
@@ -855,7 +870,7 @@ export default function InteractiveAvatar() {
                     src="/audio/home.mp3"
                     preload="auto"
                     playsInline
-                    // @ts-ignore
+                    // @ts-expect-error Non-standard mobile attribute
                     webkit-playsinline="true"
                     style={{ width: "1px", height: "1px", opacity: 0 }}
                 />
