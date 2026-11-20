@@ -390,11 +390,6 @@ export default function Preloader() {
         aria-hidden="true"
       />
 
-      {/* Luxury Corner Filigree Accents */}
-      <div className="absolute inset-4 md:inset-6 border border-[rgba(163,124,42,0.28)] opacity-35 pointer-events-none">
-        <div className="absolute -top-[1px] -left-[1px] w-4 h-4 border-t-2 border-l-2 border-[#a37c2a]" />
-        <div className="absolute -bottom-[1px] -right-[1px] w-4 h-4 border-b-2 border-r-2 border-[#a37c2a]" />
-      </div>
 
       {/* Centered Transparent Character Stage */}
       <div className="relative z-10 flex items-center justify-center w-full h-full p-4 pointer-events-none">
