@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { Volume2, VolumeX, X } from "lucide-react";
+import avatarIdlePoster from "@/assets/avatar-idle.png";
 
 interface AvatarConfig {
     videoSrc: string;
@@ -800,7 +801,7 @@ export default function InteractiveAvatar() {
                 >
                     {/* Idle state static transparent visual for pristine instant appearance without video lag */}
                     <img
-                        src="/avatar-idle.png"
+                        src={avatarIdlePoster}
                         alt="A.R. Grands Concierge"
                         className={`absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-300 ${
                             stage === "speaking" ? "opacity-0" : "opacity-100"
@@ -812,48 +813,53 @@ export default function InteractiveAvatar() {
                         ref={canvasRef}
                         width={480}
                         height={640}
+                        style={{ display: stage === "speaking" ? "block" : "none" }}
                         className={`w-full h-full object-contain block bg-transparent border-0 outline-none shadow-none pointer-events-auto will-change-transform transition-opacity duration-300 ${
                             stage === "speaking" ? "opacity-100" : "opacity-0"
                         }`}
                     />
-
-                    {/* Hidden offscreen 1x1 video element strictly used as WebGL texture source - zero visible green mat */}
-                    <video
-                        ref={videoRef}
-                        src="/avatar-welcome.mp4"
-                        muted
-                        playsInline
-                        // @ts-ignore
-                        webkit-playsinline="true"
-                        x5-playsinline="true"
-                        disablePictureInPicture
-                        disableRemotePlayback
-                        preload="auto"
-                        crossOrigin="anonymous"
-                        style={{
-                            position: "absolute",
-                            width: "1px",
-                            height: "1px",
-                            opacity: 0,
-                            pointerEvents: "none",
-                            zIndex: -9999,
-                            top: "-9999px",
-                            left: "-9999px"
-                        }}
-                    />
-
-                    {/* Natural Voice Audio Source Preloaded for Zero Delay */}
-                    <audio
-                        ref={audioRef}
-                        src="/audio/home.mp3"
-                        preload="auto"
-                        playsInline
-                        // @ts-ignore
-                        webkit-playsinline="true"
-                        style={{ position: "absolute", width: "1px", height: "1px", opacity: 0, pointerEvents: "none" }}
-                    />
                 </div>
             </aside>
+
+            {/* Dedicated Offscreen Media Decode Sandbox - Strictly 1x1 offscreen to feed WebGL texture */}
+            <div
+                aria-hidden="true"
+                style={{
+                    position: "fixed",
+                    top: "-9999px",
+                    left: "-9999px",
+                    width: "1px",
+                    height: "1px",
+                    opacity: 0,
+                    pointerEvents: "none",
+                    overflow: "hidden",
+                    zIndex: -9999
+                }}
+            >
+                <video
+                    ref={videoRef}
+                    src="/avatar-welcome.mp4"
+                    muted
+                    playsInline
+                    // @ts-ignore
+                    webkit-playsinline="true"
+                    x5-playsinline="true"
+                    disablePictureInPicture
+                    disableRemotePlayback
+                    preload="auto"
+                    crossOrigin="anonymous"
+                    style={{ width: "1px", height: "1px", opacity: 0 }}
+                />
+                <audio
+                    ref={audioRef}
+                    src="/audio/home.mp3"
+                    preload="auto"
+                    playsInline
+                    // @ts-ignore
+                    webkit-playsinline="true"
+                    style={{ width: "1px", height: "1px", opacity: 0 }}
+                />
+            </div>
         </>
     );
 }
