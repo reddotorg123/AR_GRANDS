@@ -36,20 +36,18 @@ const routeAvatarConfigs: Record<string, AvatarConfig> = {
     "/locations/madhavaram": { videoSrc: "/avatar-location.mp4", audioSrc: "/audio/madhavaram.mp3", text: "Easily accessible venues across North Chennai with ample parking." }
 };
 
-
-
 // Tracks all sections & routes that have already played during this browser session.
 // Cleared automatically on page reload so animations run strictly ONCE until the next reload.
 const playedKeys = new Set<string>();
 
 export default function InteractiveAvatar() {
-    // Initial state: hidden until dwell condition (60ms) is met
+    // Initial stage: hidden until mounted and route checked
     const [stage, setStage] = useState<"hidden" | "entering" | "waiting" | "speaking" | "idle" | "rejected">("hidden");
+    const [tourPromptActive, setTourPromptActive] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
     const [, setAudioBlocked] = useState(false);
     const [currentText, setCurrentText] = useState("Welcome to A.R. Grand! Explore our luxury halls.");
     const [isBubbleOpen, setIsBubbleOpen] = useState(false);
-    const [hasTouched, setHasTouched] = useState(false);
     const [isFormActive, setIsFormActive] = useState(false);
 
     const location = useLocation();
@@ -66,10 +64,24 @@ export default function InteractiveAvatar() {
     const isSpeakingRef = useRef(false);
     const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Dwell condition controls: 60ms quick non-blocking emergence
+    // Dwell condition controls
     const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const dwellSatisfiedRef = useRef(false);
     const hasUserInteractedRef = useRef(false);
+
+    // Clear WebGL canvas to fully transparent pixels
+    const clearCanvas = useCallback(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        try {
+            const gl = (canvas.getContext("webgl") || canvas.getContext("experimental-webgl")) as WebGLRenderingContext | null;
+            if (gl) {
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                gl.clearColor(0, 0, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+            }
+        } catch (_) {}
+    }, []);
 
     const stopSpeech = useCallback(() => {
         playRequestIdRef.current += 1;
@@ -133,8 +145,9 @@ export default function InteractiveAvatar() {
                 }
                 bubbleTimerRef.current = setTimeout(() => {
                     setIsBubbleOpen(false);
-                    setStage("idle");
-                }, 1200);
+                    clearCanvas();
+                    setStage("hidden");
+                }, 800);
             };
         }
 
@@ -163,7 +176,8 @@ export default function InteractiveAvatar() {
                 video.pause();
                 if (!isSpeakingRef.current) {
                     setIsBubbleOpen(false);
-                    setStage("idle");
+                    clearCanvas();
+                    setStage("hidden");
                 }
             };
 
@@ -195,11 +209,12 @@ export default function InteractiveAvatar() {
                 if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
                 bubbleTimerRef.current = setTimeout(() => {
                     setIsBubbleOpen(false);
-                    setStage("idle");
+                    clearCanvas();
+                    setStage("hidden");
                 }, 2500);
             }
         }
-    }, []);
+    }, [clearCanvas]);
 
     // Form input avoidance: When an input, textarea, or form is active, fade out avatar to avoid blocking
     useEffect(() => {
@@ -306,7 +321,6 @@ export default function InteractiveAvatar() {
             quadBuffer = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
             // 3:4 portrait crop centered on character (u: 0.28 to 0.70)
-            // Removes 170px transparent side gutters so character fits perfectly in the empty margin space
             const uMin = 0.28;
             const uMax = 0.70;
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
@@ -396,7 +410,7 @@ export default function InteractiveAvatar() {
         };
     }, []);
 
-    // Tab Visibility Protection: Pauses on background tab and resumes cleanly without blank frames or unexpected speech
+    // Tab Visibility Protection: Pauses on background tab and resumes cleanly without blank frames
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.hidden) {
@@ -423,21 +437,61 @@ export default function InteractiveAvatar() {
         };
     }, [stage]);
 
-    // Start animation & speech only after user touches or interacts with the page
+    // Handle user tour confirmation: Click "Yes"
+    const handleStartTour = (e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setTourPromptActive(false);
+        hasUserInteractedRef.current = true;
+        const routeKey = "route:" + location.pathname;
+        playedKeys.add(routeKey);
+
+        const config = routeAvatarConfigs[location.pathname] || routeAvatarConfigs["/"];
+        activeConfigRef.current = config;
+
+        // Immediate direct synchronous user activation unlock for audio & video on click/tap
+        if (audioRef.current && !isMutedRef.current) {
+            const audio = audioRef.current;
+            audio.muted = false;
+            audio.play().catch(() => {});
+        }
+        if (videoRef.current) {
+            const video = videoRef.current;
+            video.muted = true;
+            video.play().catch(() => {});
+        }
+
+        setStage("speaking");
+        setIsBubbleOpen(true);
+        playConfig(config);
+    };
+
+    // Handle user declining tour: Click "No"
+    const handleDeclineTour = (e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setTourPromptActive(false);
+        const routeKey = "route:" + location.pathname;
+        playedKeys.add(routeKey);
+        handleDismiss();
+    };
+
+    // User touch interaction listener for subpages or general audio unlock
     useEffect(() => {
         const onFirstInteraction = () => {
             if (isExcludedRoute(location.pathname)) return;
+
+            // If on home page and not yet played, let the polite "Want my help?" prompt stay active
+            if (location.pathname === "/" && !playedKeys.has("route:/")) {
+                return;
+            }
+
             if (hasUserInteractedRef.current) return;
             hasUserInteractedRef.current = true;
-            setHasTouched(true);
 
             window.removeEventListener("pointerdown", onFirstInteraction, true);
             window.removeEventListener("touchstart", onFirstInteraction, true);
             window.removeEventListener("click", onFirstInteraction, true);
             window.removeEventListener("keydown", onFirstInteraction, true);
 
-            // CRITICAL FOR IOS SAFARI (iPhone 7 / older mobile browsers):
-            // Audio elements MUST be initialized and unlocked synchronously within the user touch/pointer callstack.
             const config = activeConfigRef.current;
             if (config?.audioSrc) {
                 let audio = audioRef.current;
@@ -447,7 +501,6 @@ export default function InteractiveAvatar() {
                     audioRef.current = audio;
                 }
                 audio.muted = false;
-                // Synchronous direct play to guarantee iOS Safari audio unlocking
                 const playPromise = audio.play();
                 if (playPromise !== undefined) {
                     playPromise.catch(() => {});
@@ -459,15 +512,12 @@ export default function InteractiveAvatar() {
                 videoRef.current.play().catch(() => {});
             }
 
-            // On Home page and other pages, strictly play first route animation
             const routeKey = "route:" + location.pathname;
             if (!playedKeys.has(routeKey)) {
                 playedKeys.add(routeKey);
                 setStage("speaking");
                 setIsBubbleOpen(true);
                 playConfig(config);
-            } else {
-                setStage("idle");
             }
         };
 
@@ -485,8 +535,6 @@ export default function InteractiveAvatar() {
     }, [location.pathname, playConfig]);
 
     // Route Switching & Dwell Timing:
-    // Keeps avatar completely INVISIBLE until user touch is triggered,
-    // and stays strictly HIDDEN once played (or when switching back to visited tabs)
     useEffect(() => {
         if (dwellTimerRef.current) {
             clearTimeout(dwellTimerRef.current);
@@ -502,16 +550,12 @@ export default function InteractiveAvatar() {
         if (isExcludedRoute(location.pathname)) {
             setStage("hidden");
             setIsBubbleOpen(false);
-            stopSpeech();
-            if (videoRef.current) {
-                videoRef.current.pause();
-            }
+            setTourPromptActive(false);
             return;
         }
 
         const config = routeAvatarConfigs[location.pathname] || routeAvatarConfigs["/"];
         activeConfigRef.current = config;
-        setCurrentText(config.text);
 
         const routeKey = "route:" + location.pathname;
         const alreadyPlayed = playedKeys.has(routeKey);
@@ -526,31 +570,36 @@ export default function InteractiveAvatar() {
             }
         }
 
-        // 200 millisecond waiting time for clean non-intrusive emergence
         dwellTimerRef.current = setTimeout(() => {
             dwellSatisfiedRef.current = true;
 
-            // If user has NOT touched the page yet, stay completely INVISIBLE!
-            if (!hasUserInteractedRef.current) {
-                setStage("hidden");
-                setIsBubbleOpen(false);
-                if (videoRef.current) {
-                    videoRef.current.pause();
+            if (location.pathname === "/") {
+                if (!alreadyPlayed) {
+                    // On Home screen, position idle poster on the LEFT asking: "Want my help?"
+                    setStage("idle");
+                    setCurrentText("Want my help?");
+                    setIsBubbleOpen(true);
+                    setTourPromptActive(true);
+                } else {
+                    setStage("hidden");
+                    setIsBubbleOpen(false);
+                    setTourPromptActive(false);
                 }
                 return;
             }
 
-            // User has touched the page:
+            // On other pages:
             if (alreadyPlayed) {
-                // Settle into idle state so avatar remains visible and clickable without re-triggering speech automatically
-                setStage("idle");
+                setStage("hidden");
                 setIsBubbleOpen(false);
-            } else {
+            } else if (hasUserInteractedRef.current) {
                 playedKeys.add(routeKey);
-                
                 setStage("speaking");
                 setIsBubbleOpen(true);
-                playConfig(activeConfigRef.current);
+                playConfig(config);
+            } else {
+                setStage("idle");
+                setIsBubbleOpen(false);
             }
         }, DWELL_TIME_MS);
 
@@ -561,8 +610,6 @@ export default function InteractiveAvatar() {
             }
         };
     }, [location.pathname, stopSpeech, playConfig]);
-
-
 
     const handleDismiss = () => {
         stopSpeech();
@@ -579,6 +626,8 @@ export default function InteractiveAvatar() {
         }
         dwellSatisfiedRef.current = false;
         setIsBubbleOpen(false);
+        setTourPromptActive(false);
+        clearCanvas();
         setStage("hidden");
     };
 
@@ -601,7 +650,7 @@ export default function InteractiveAvatar() {
             e.stopPropagation();
         }
         hasUserInteractedRef.current = true;
-        setHasTouched(true);
+        setTourPromptActive(false);
         if (audioRef.current) {
             audioRef.current.muted = false;
         }
@@ -620,26 +669,38 @@ export default function InteractiveAvatar() {
 
     if (isExcludedRoute(location.pathname)) return null;
 
-    // Visible on interaction when speaking or in friendly idle state
-    const isVisible = hasTouched && (stage === "entering" || stage === "speaking" || stage === "idle") && !isFormActive;
+    const isVisible = (stage === "entering" || stage === "speaking" || stage === "idle") && !isFormActive;
 
-    // Route-specific placement to utilize empty space:
-    // - On /contact: Position in the MIDDLE part between contact details and the map (as marked in red)
-    // - On /events: Position on the LEFT under Scheduled Bookings
-    const isCenter = location.pathname === "/contact";
-    const isLeft = location.pathname === "/events";
-    const isFacilities = location.pathname === "/facilities";
-    const isGallery = location.pathname === "/gallery";
     const isHome = location.pathname === "/";
+    const isCenter = location.pathname === "/contact";
+    const isEvents = location.pathname === "/events";
+
+    // On Home page: avatar stays on the LEFT when idle/asking for help, and slides to the RIGHT when speaking.
+    // On other pages: events is left, contact is center, and others are right.
+    const isAvatarOnRight = (isHome && stage === "speaking") || (!isHome && !isEvents && !isCenter);
+
+    // Notify WhatsApp floating button to coordinate position without overlapping
+    useEffect(() => {
+        const side = isAvatarOnRight ? "right" : "left";
+        window.dispatchEvent(new CustomEvent("avatar-position", { detail: side }));
+    }, [isAvatarOnRight]);
+
+    // Hardware-accelerated 60fps GPU transforms for low-spec mobile smooth sliding
+    const translateY = isVisible ? "0px" : "48px";
+    const translateX = isCenter
+        ? "-50%"
+        : isAvatarOnRight
+        ? "calc(100vw - 100% - var(--edge-offset, 1.5rem))"
+        : "0px";
 
     return (
         <>
-            {/* Quick Re-open Virtual Concierge Pill when dismissed */}
-            {hasTouched && stage === "hidden" && !isFormActive && (
+            {/* Quick Re-open Virtual Concierge Pill when dismissed or tour finished */}
+            {stage === "hidden" && !isFormActive && (
                 <button
                     onClick={handleAvatarClick}
                     className={`fixed bottom-3 z-30 flex items-center gap-2 px-3.5 py-2 rounded-full bg-card/95 backdrop-blur-md border border-[hsl(var(--gold)/0.5)] shadow-[var(--shadow-elegant)] text-foreground text-xs font-semibold hover:border-[hsl(var(--gold))] hover:scale-105 active:scale-95 transition-all cursor-pointer group ${
-                        isLeft ? "left-3 sm:left-6" : "right-3 sm:right-6"
+                        isAvatarOnRight ? "right-3 sm:right-6" : "left-3 sm:left-6"
                     }`}
                     title="Click to speak with Virtual Concierge"
                     aria-label="Open Virtual Concierge"
@@ -654,63 +715,78 @@ export default function InteractiveAvatar() {
 
             <aside
                 aria-label="Interactive Concierge"
-                className={`fixed bottom-2 sm:bottom-4 z-30 flex flex-col pointer-events-none select-none transition-all duration-700 ease-out ${
-                    isCenter
-                        ? "left-1/2 -translate-x-1/2 items-center"
-                        : isLeft
-                        ? "left-2 sm:left-4 md:left-6 items-start"
-                        : "right-2 sm:right-4 md:right-6 items-end"
+                className={`fixed bottom-2 sm:bottom-4 z-30 flex flex-col items-center select-none [--edge-offset:1.5rem] sm:[--edge-offset:3rem] md:[--edge-offset:4rem] ${
+                    isCenter ? "left-1/2" : "left-3 sm:left-6 md:left-8"
                 } ${
-                    isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12 pointer-events-none"
+                    isVisible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
                 }`}
+                style={{
+                    transform: `translate3d(${translateX}, ${translateY}, 0)`,
+                    transition: "transform 650ms cubic-bezier(0.22, 1, 0.36, 1), opacity 400ms ease",
+                    willChange: "transform"
+                }}
             >
-                {/* Compact Message Structure Speech Bubble */}
+                {/* Speech Bubble */}
                 {isVisible && (
                     <div
-                        className={`relative mb-1.5 pointer-events-auto transition-all duration-500 ease-out ${
-                            isCenter ? "mx-auto" : isLeft ? "ml-1 sm:ml-2" : "mr-1 sm:mr-2"
-                        } ${
+                        className={`relative mb-2 pointer-events-auto transition-all duration-400 ease-out ${
                             isBubbleOpen
                                 ? "opacity-100 scale-100 translate-y-0"
                                 : "opacity-0 scale-95 translate-y-2 pointer-events-none"
                         }`}
                     >
                         <div
-                            onClick={handleAvatarClick}
-                            title="Click to interact"
-                            className="relative max-w-[150px] sm:max-w-[185px] bg-card/95 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-[hsl(var(--gold)/0.45)] shadow-[var(--shadow-elegant)] flex items-start gap-1.5 cursor-pointer hover:border-[hsl(var(--gold))] group transition-all"
+                            onClick={tourPromptActive ? undefined : handleAvatarClick}
+                            title={tourPromptActive ? undefined : "Click to interact"}
+                            className="relative max-w-[170px] sm:max-w-[210px] bg-card/95 backdrop-blur-md px-3 py-2 rounded-xl border border-[hsl(var(--gold)/0.45)] shadow-[var(--shadow-elegant)] flex flex-col gap-2 transition-all cursor-default"
                         >
-                            <p className="text-[10px] sm:text-[11px] text-foreground font-medium leading-snug flex-1 select-text">
-                                {currentText}
-                            </p>
-                            <div className="flex items-center gap-0.5 shrink-0 pt-0.5 border-l border-border/40 pl-1">
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); toggleMute(); }}
-                                    className="text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-muted/60 transition-colors"
-                                    title={isMuted ? "Unmute voice" : "Mute voice"}
-                                    aria-label={isMuted ? "Unmute voice" : "Mute voice"}
-                                >
-                                    {isMuted ? <VolumeX size={10} /> : <Volume2 size={10} />}
-                                </button>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
-                                    className="text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-muted/60 transition-colors"
-                                    title="Dismiss"
-                                    aria-label="Dismiss concierge"
-                                >
-                                    <X size={10} />
-                                </button>
+                            <div className="flex items-center justify-between gap-1.5">
+                                <p className="text-[11px] sm:text-xs text-foreground font-semibold leading-snug flex-1 select-text">
+                                    {tourPromptActive ? "Want my help?" : currentText}
+                                </p>
+                                <div className="flex items-center gap-0.5 shrink-0 pt-0.5 border-l border-border/40 pl-1">
+                                    {!tourPromptActive && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); toggleMute(); }}
+                                            className="text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-muted/60 transition-colors"
+                                            title={isMuted ? "Unmute voice" : "Mute voice"}
+                                            aria-label={isMuted ? "Unmute voice" : "Mute voice"}
+                                        >
+                                            {isMuted ? <VolumeX size={11} /> : <Volume2 size={11} />}
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
+                                        className="text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-muted/60 transition-colors"
+                                        title="Dismiss"
+                                        aria-label="Dismiss concierge"
+                                    >
+                                        <X size={11} />
+                                    </button>
+                                </div>
                             </div>
+
+                            {/* Yes / No Tour Prompt Interactive Buttons */}
+                            {tourPromptActive && (
+                                <div className="flex items-center gap-2 pt-1 border-t border-border/30">
+                                    <button
+                                        onClick={handleStartTour}
+                                        className="flex-1 py-1.5 px-3 rounded-lg bg-[hsl(var(--gold))] text-black font-bold text-[11px] hover:brightness-110 active:scale-95 transition-all text-center shadow-sm cursor-pointer"
+                                    >
+                                        Yes
+                                    </button>
+                                    <button
+                                        onClick={handleDeclineTour}
+                                        className="flex-1 py-1.5 px-3 rounded-lg bg-muted text-muted-foreground font-medium text-[11px] hover:text-foreground hover:bg-muted/80 active:scale-95 transition-all text-center cursor-pointer border border-border/40"
+                                    >
+                                        No
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Speech Bubble Tail pointing down towards the boy */}
                             <div
-                                className={`absolute -bottom-1 w-2.5 h-2.5 bg-card rotate-45 border-r border-b border-[hsl(var(--gold)/0.45)] ${
-                                    isCenter
-                                        ? "left-1/2 -translate-x-1/2"
-                                        : isLeft
-                                        ? "left-6 sm:left-8"
-                                        : "right-6 sm:right-8"
-                                }`}
+                                className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-card rotate-45 border-r border-b border-[hsl(var(--gold)/0.45)]"
                             />
                         </div>
                     </div>
@@ -718,21 +794,30 @@ export default function InteractiveAvatar() {
 
                 {/* Character Stage - Sleek 3:4 Vertical Profile Fully Visible Within Viewport */}
                 <div
-                    onClick={handleAvatarClick}
-                    title="Click the boy to speak"
-                    className="relative w-24 sm:w-28 md:w-36 lg:w-40 xl:w-44 aspect-[3/4] cursor-pointer pointer-events-auto overflow-visible transition-all duration-300 ease-in-out translate-y-0 sm:translate-y-1"
+                    onClick={tourPromptActive ? handleStartTour : handleAvatarClick}
+                    title={tourPromptActive ? "Click Yes to start tour" : "Click the boy to speak"}
+                    className="relative w-28 sm:w-36 md:w-40 lg:w-44 aspect-[3/4] cursor-pointer pointer-events-auto overflow-visible select-none transition-transform duration-300 hover:scale-[1.02] active:scale-[0.98]"
                 >
-                    {/* 100% Pure Transparent WebGL Canvas (Optimized 480x640 Retina Resolution) */}
+                    {/* Idle state static transparent visual for pristine instant appearance without video lag */}
+                    <img
+                        src="/avatar-idle.png"
+                        alt="A.R. Grands Concierge"
+                        className={`absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-300 ${
+                            stage === "speaking" ? "opacity-0" : "opacity-100"
+                        }`}
+                    />
+
+                    {/* 100% Pure Transparent WebGL Canvas (Active during speaking video playback) */}
                     <canvas
                         ref={canvasRef}
                         width={480}
                         height={640}
-                        className={`w-full h-full object-contain block bg-transparent border-0 outline-none shadow-none pointer-events-auto ${
-                            isCenter ? "object-center" : isLeft ? "object-left" : "object-right"
+                        className={`w-full h-full object-contain block bg-transparent border-0 outline-none shadow-none pointer-events-auto will-change-transform transition-opacity duration-300 ${
+                            stage === "speaking" ? "opacity-100" : "opacity-0"
                         }`}
                     />
 
-                    {/* Video Source - Streamlined H.264 Faststart with Full iOS/Android Inline Attributes */}
+                    {/* Hidden offscreen 1x1 video element strictly used as WebGL texture source - zero visible green mat */}
                     <video
                         ref={videoRef}
                         src="/avatar-welcome.mp4"
@@ -745,7 +830,16 @@ export default function InteractiveAvatar() {
                         disableRemotePlayback
                         preload="auto"
                         crossOrigin="anonymous"
-                        className="absolute inset-0 w-full h-full opacity-[0.001] pointer-events-none -z-10"
+                        style={{
+                            position: "absolute",
+                            width: "1px",
+                            height: "1px",
+                            opacity: 0,
+                            pointerEvents: "none",
+                            zIndex: -9999,
+                            top: "-9999px",
+                            left: "-9999px"
+                        }}
                     />
 
                     {/* Natural Voice Audio Source Preloaded for Zero Delay */}
@@ -753,7 +847,10 @@ export default function InteractiveAvatar() {
                         ref={audioRef}
                         src="/audio/home.mp3"
                         preload="auto"
-                        className="hidden"
+                        playsInline
+                        // @ts-ignore
+                        webkit-playsinline="true"
+                        style={{ position: "absolute", width: "1px", height: "1px", opacity: 0, pointerEvents: "none" }}
                     />
                 </div>
             </aside>

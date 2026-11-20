@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { MessageCircle } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
@@ -5,9 +6,23 @@ const WHATSAPP_NUMBER = "919791165395";
 
 const WhatsAppButton = () => {
   const location = useLocation();
-  // On /events and /contact the avatar utilizes the empty space on the left,
-  // so the floating WhatsApp button gracefully positions on the right.
-  const isRight = location.pathname === "/events" || location.pathname === "/contact";
+  const [avatarSide, setAvatarSide] = useState<"left" | "right">("left");
+
+  useEffect(() => {
+    const handleAvatarPos = (e: Event) => {
+      const customEvent = e as CustomEvent<"left" | "right">;
+      if (customEvent.detail) {
+        setAvatarSide(customEvent.detail);
+      }
+    };
+    window.addEventListener("avatar-position", handleAvatarPos);
+    return () => window.removeEventListener("avatar-position", handleAvatarPos);
+  }, []);
+
+  // When avatar is on the left (e.g. idle on home, or on /events), WhatsApp button gracefully positions on the right.
+  // When avatar is on the right (speaking on home, or standard pages), WhatsApp gracefully positions on the left.
+  const isContactOrEvents = location.pathname === "/events" || location.pathname === "/contact";
+  const isRight = isContactOrEvents || (location.pathname === "/" && avatarSide === "left");
 
   return (
     <a
